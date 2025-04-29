@@ -1,110 +1,127 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Medal, Award } from 'lucide-react';
-import { Tournament, Platoon, PlatoonNames, TournamentStatus, MatchStatus } from '../types';
+import { Trophy, Medal } from 'lucide-react';
 import { getAllTournaments } from '../services/tournamentService';
+import { Tournament, Platoon, PlatoonNames, TournamentStatus } from '../types';
 import Card from '../components/ui/Card';
 
-interface PlatoonStanding {
+interface PlatoonStats {
   platoon: Platoon;
   points: number;
   wins: number;
   draws: number;
   losses: number;
-  gold: number;
-  silver: number;
-  bronze: number;
+  gold: number;   // First place finishes
+  silver: number; // Second place finishes
+  bronze: number; // Third place finishes
 }
 
 const Standings: React.FC = () => {
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [standings, setStandings] = useState<PlatoonStanding[]>([]);
+  const [standings, setStandings] = useState<PlatoonStats[]>([]);
 
   useEffect(() => {
-    const fetchTournaments = async () => {
+    const fetchStandings = async () => {
       try {
-        const data = await getAllTournaments();
-        setTournaments(data);
-        calculateStandings(data);
+        const tournaments = await getAllTournaments();
+        const completedTournaments = tournaments.filter(t => t.status === TournamentStatus.COMPLETED);
+        
+        // Initialize stats for each platoon
+        const stats: Record<Platoon, PlatoonStats> = Object.values(Platoon).reduce((acc, platoon) => ({
+          ...acc,
+          [platoon]: {
+            platoon,
+            points: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            gold: 0,
+            silver: 0,
+            bronze: 0
+          }
+        }), {} as Record<Platoon, PlatoonStats>);
+
+        // Calculate stats from completed tournaments
+        completedTournaments.forEach(tournament => {
+          const positions = calculateTournamentPositions(tournament);
+          
+          // Award points based on position
+          if (positions[0]) {
+            stats[positions[0]].points += 7;
+            stats[positions[0]].gold += 1;
+          }
+          if (positions[1]) {
+            stats[positions[1]].points += 4;
+            stats[positions[1]].silver += 1;
+          }
+          if (positions[2]) {
+            stats[positions[2]].points += 2;
+            stats[positions[2]].bronze += 1;
+          }
+          if (positions[3]) {
+            stats[positions[3]].points += 1;
+          }
+
+          // Calculate match statistics
+          tournament.matches.forEach(match => {
+            if (!match.result?.winner) return;
+
+            const winningTeam = match.result.winner as Platoon;
+            const losingTeam = match.teamA === winningTeam ? match.teamB : match.teamA;
+
+            if (match.result.teamAScore === match.result.teamBScore) {
+              stats[match.teamA as Platoon].draws++;
+              stats[match.teamB as Platoon].draws++;
+            } else {
+              stats[winningTeam].wins++;
+              stats[losingTeam as Platoon].losses++;
+            }
+          });
+        });
+
+        // Sort by points and then by gold medals
+        const sortedStandings = Object.values(stats).sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          if (b.gold !== a.gold) return b.gold - a.gold;
+          if (b.silver !== a.silver) return b.silver - a.silver;
+          return b.bronze - a.bronze;
+        });
+
+        setStandings(sortedStandings);
       } catch (err) {
-        console.error('Error fetching tournaments:', err);
-        setError('אירעה שגיאה בטעינת הטורנירים');
+        console.error('Error fetching standings:', err);
+        setError('אירעה שגיאה בטעינת הטבלה');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTournaments();
+    fetchStandings();
   }, []);
 
-  const calculateStandings = (tournaments: Tournament[]) => {
-    // Initialize standings for all platoons
-    const platoonStandings: Record<Platoon, PlatoonStanding> = Object.values(Platoon).reduce((acc, platoon) => ({
-      ...acc,
-      [platoon]: {
-        platoon,
-        points: 0,
-        wins: 0,
-        draws: 0,
-        losses: 0,
-        gold: 0,
-        silver: 0,
-        bronze: 0
-      }
-    }), {} as Record<Platoon, PlatoonStanding>);
+  const calculateTournamentPositions = (tournament: Tournament): Platoon[] => {
+    const positions: Platoon[] = [];
+    const knockoutMatches = tournament.matches.filter(m => 
+      m.stage === 'final' || m.stage === 'third_place'
+    );
 
-    // Process each tournament
-    tournaments.forEach(tournament => {
-      if (tournament.status !== TournamentStatus.COMPLETED) return;
+    // Find winner (1st place)
+    const finalMatch = knockoutMatches.find(m => m.stage === 'final');
+    if (finalMatch?.result?.winner) {
+      positions[0] = finalMatch.result.winner as Platoon;
+      positions[1] = (finalMatch.teamA === finalMatch.result.winner ? 
+        finalMatch.teamB : finalMatch.teamA) as Platoon;
+    }
 
-      // Find the final match
-      const finalMatch = tournament.matches.find(m => m.stage === 'final' && m.status === MatchStatus.COMPLETED);
-      const thirdPlaceMatch = tournament.matches.find(m => m.stage === 'third_place' && m.status === MatchStatus.COMPLETED);
+    // Find 3rd place
+    const thirdPlaceMatch = knockoutMatches.find(m => m.stage === 'third_place');
+    if (thirdPlaceMatch?.result?.winner) {
+      positions[2] = thirdPlaceMatch.result.winner as Platoon;
+      positions[3] = (thirdPlaceMatch.teamA === thirdPlaceMatch.result.winner ? 
+        thirdPlaceMatch.teamB : thirdPlaceMatch.teamA) as Platoon;
+    }
 
-      if (finalMatch?.result) {
-        // Award points for 1st and 2nd place
-        const winner = finalMatch.result.winner;
-        const loser = finalMatch.teamA === winner ? finalMatch.teamB : finalMatch.teamA;
-        
-        platoonStandings[winner as Platoon].points += 7;
-        platoonStandings[winner as Platoon].gold += 1;
-        platoonStandings[loser as Platoon].points += 4;
-        platoonStandings[loser as Platoon].silver += 1;
-      }
-
-      if (thirdPlaceMatch?.result) {
-        // Award points for 3rd and 4th place
-        const thirdPlace = thirdPlaceMatch.result.winner;
-        const fourthPlace = thirdPlaceMatch.teamA === thirdPlace ? thirdPlaceMatch.teamB : thirdPlaceMatch.teamA;
-        
-        platoonStandings[thirdPlace as Platoon].points += 2;
-        platoonStandings[thirdPlace as Platoon].bronze += 1;
-        platoonStandings[fourthPlace as Platoon].points += 1;
-      }
-
-      // Count wins, draws, and losses from all matches
-      tournament.matches.forEach(match => {
-        if (match.status !== MatchStatus.COMPLETED || !match.result) return;
-
-        const { teamAScore, teamBScore } = match.result;
-        
-        if (teamAScore > teamBScore) {
-          platoonStandings[match.teamA as Platoon].wins += 1;
-          platoonStandings[match.teamB as Platoon].losses += 1;
-        } else if (teamAScore < teamBScore) {
-          platoonStandings[match.teamB as Platoon].wins += 1;
-          platoonStandings[match.teamA as Platoon].losses += 1;
-        } else {
-          platoonStandings[match.teamA as Platoon].draws += 1;
-          platoonStandings[match.teamB as Platoon].draws += 1;
-        }
-      });
-    });
-
-    // Convert to array and sort by points
-    const sortedStandings = Object.values(platoonStandings).sort((a, b) => b.points - a.points);
-    setStandings(sortedStandings);
+    return positions;
   };
 
   if (loading) {
@@ -129,61 +146,59 @@ const Standings: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center mb-8">
         <Trophy className="h-8 w-8 text-primary-500 mr-3" />
-        <h1 className="text-3xl font-bold">דירוג כללי</h1>
+        <h1 className="text-3xl font-bold">טבלת דירוג כללית</h1>
       </div>
 
-      <Card className="p-6">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b">
-                <th className="text-right py-3 px-4">דירוג</th>
-                <th className="text-right py-3 px-4">פלוגה</th>
-                <th className="text-center py-3 px-4">נקודות</th>
-                <th className="text-center py-3 px-4">נצחונות</th>
-                <th className="text-center py-3 px-4">תיקו</th>
-                <th className="text-center py-3 px-4">הפסדים</th>
-                <th className="text-center py-3 px-4">מדליות</th>
+              <tr className="bg-gray-50 border-b">
+                <th className="px-6 py-4 text-right text-sm font-medium text-gray-500">דירוג</th>
+                <th className="px-6 py-4 text-right text-sm font-medium text-gray-500">פלוגה</th>
+                <th className="px-6 py-4 text-center text-sm font-medium text-gray-500">נקודות</th>
+                <th className="px-6 py-4 text-center text-sm font-medium text-gray-500">נצ׳</th>
+                <th className="px-6 py-4 text-center text-sm font-medium text-gray-500">תיקו</th>
+                <th className="px-6 py-4 text-center text-sm font-medium text-gray-500">הפ׳</th>
+                <th className="px-6 py-4 text-center text-sm font-medium text-gray-500">
+                  <Trophy className="h-5 w-5 text-yellow-500 inline" />
+                </th>
+                <th className="px-6 py-4 text-center text-sm font-medium text-gray-500">
+                  <Trophy className="h-4 w-4 text-gray-400 inline" />
+                </th>
+                <th className="px-6 py-4 text-center text-sm font-medium text-gray-500">
+                  <Medal className="h-4 w-4 text-amber-700 inline" />
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {standings.map((standing, index) => (
-                <tr key={standing.platoon} className="border-b hover:bg-gray-50">
-                  <td className="py-3 px-4 text-center">
-                    {index === 0 ? (
-                      <Trophy className="h-6 w-6 text-yellow-500 mx-auto" />
-                    ) : index === 1 ? (
-                      <Trophy className="h-5 w-5 text-gray-400 mx-auto" />
-                    ) : (
-                      <span className="font-medium">{index + 1}</span>
-                    )}
+            <tbody className="divide-y divide-gray-200">
+              {standings.map((stat, index) => (
+                <tr key={stat.platoon} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    {index + 1}
                   </td>
-                  <td className="py-3 px-4 font-medium">{PlatoonNames[standing.platoon]}</td>
-                  <td className="py-3 px-4 text-center font-bold">{standing.points}</td>
-                  <td className="py-3 px-4 text-center">{standing.wins}</td>
-                  <td className="py-3 px-4 text-center">{standing.draws}</td>
-                  <td className="py-3 px-4 text-center">{standing.losses}</td>
-                  <td className="py-3 px-4 text-center">
-                    <div className="flex items-center justify-center space-x-2">
-                      {standing.gold > 0 && (
-                        <div className="flex items-center">
-                          <Trophy className="h-4 w-4 text-yellow-500" />
-                          <span className="mr-1">{standing.gold}</span>
-                        </div>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      {index === 0 && (
+                        <Trophy className="h-5 w-5 text-yellow-500 mr-2" />
                       )}
-                      {standing.silver > 0 && (
-                        <div className="flex items-center">
-                          <Trophy className="h-3 w-3 text-gray-400" />
-                          <span className="mr-1">{standing.silver}</span>
-                        </div>
-                      )}
-                      {standing.bronze > 0 && (
-                        <div className="flex items-center">
-                          <Medal className="h-3 w-3 text-amber-600" />
-                          <span>{standing.bronze}</span>
-                        </div>
-                      )}
+                      <span className="font-medium">{PlatoonNames[stat.platoon]}</span>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap">
+                    <span className="font-bold text-lg">{stat.points}</span>
+                  </td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap">{stat.wins}</td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap">{stat.draws}</td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap">{stat.losses}</td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap font-medium text-yellow-500">
+                    {stat.gold}
+                  </td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap font-medium text-gray-400">
+                    {stat.silver}
+                  </td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap font-medium text-amber-700">
+                    {stat.bronze}
                   </td>
                 </tr>
               ))}
@@ -195,4 +210,4 @@ const Standings: React.FC = () => {
   );
 };
 
-export default Standings; 
+export default Standings;

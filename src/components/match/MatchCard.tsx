@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Clock, MapPin } from 'lucide-react';
-import { Match, MatchStage, MatchStatus, SportType, PlatoonNames } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Clock, Plus, X } from 'lucide-react';
+import { Match, MatchStage, MatchStatus, SportType, PlatoonNames, PlayerScore } from '../../types';
 import { updateMatchResult } from '../../services/tournamentService';
+import { getAllPlayers, incrementPlayerGoals } from '../../services/playerService';
+import { useAuth } from '../../context/AuthContext';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 
@@ -13,10 +15,35 @@ interface MatchCardProps {
 }
 
 const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, onUpdate }) => {
+  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [teamAScore, setTeamAScore] = useState(match.result?.teamAScore || 0);
   const [teamBScore, setTeamBScore] = useState(match.result?.teamBScore || 0);
   const [loading, setLoading] = useState(false);
+  const [scorers, setScorers] = useState<PlayerScore[]>(match.result?.scorers || []);
+  const [availablePlayers, setAvailablePlayers] = useState<Array<{ id: string; name: string; platoon: string }>>([]);
+  const [showScorerForm, setShowScorerForm] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState('');
+  const [isOwnGoal, setIsOwnGoal] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<string>(match.teamA);
+
+  useEffect(() => {
+    if (sportType === SportType.SOCCER) {
+      const fetchPlayers = async () => {
+        try {
+          const players = await getAllPlayers();
+          setAvailablePlayers(players.map(p => ({
+            id: p.id,
+            name: `${p.firstName} ${p.lastName}`,
+            platoon: p.platoon
+          })));
+        } catch (error) {
+          console.error('Error fetching players:', error);
+        }
+      };
+      fetchPlayers();
+    }
+  }, [sportType]);
 
   const handleStartMatch = async () => {
     try {
@@ -24,7 +51,9 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
         teamAScore: 0,
         teamBScore: 0,
         winner: null,
-        status: MatchStatus.IN_PROGRESS
+        status: MatchStatus.IN_PROGRESS,
+        startedAt: new Date().toISOString(),
+        scorers: []
       });
       onUpdate?.();
     } catch (error) {
@@ -36,9 +65,10 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
     setLoading(true);
     try {
       await updateMatchResult(tournamentId, match.id, {
+        ...match.result,
         teamAScore,
         teamBScore,
-        winner: null,
+        scorers,
         status: MatchStatus.IN_PROGRESS
       });
       setIsEditing(false);
@@ -58,10 +88,13 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
       else if (teamBScore > teamAScore) winner = match.teamB;
 
       await updateMatchResult(tournamentId, match.id, {
+        ...match.result,
         teamAScore,
         teamBScore,
         winner,
-        status: MatchStatus.COMPLETED
+        scorers,
+        status: MatchStatus.COMPLETED,
+        endedAt: new Date().toISOString()
       });
       setIsEditing(false);
       onUpdate?.();
@@ -72,6 +105,68 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
     }
   };
 
+  const handleAddScorer = async () => {
+    if (!selectedPlayer) return;
+
+    const player = availablePlayers.find(p => p.id === selectedPlayer);
+    if (!player) return;
+
+    try {
+      // Only increment goals for non-own goals
+      if (!isOwnGoal) {
+        await incrementPlayerGoals(player.id);
+      }
+
+      const newScorer: PlayerScore = {
+        playerId: player.id,
+        playerName: player.name,
+        team: isOwnGoal ? (selectedTeam === match.teamA ? match.teamB : match.teamA) : selectedTeam,
+        count: 1,
+        isOwnGoal
+      };
+
+      setScorers(prev => [...prev, newScorer]);
+      
+      // Update total scores
+      if (selectedTeam === match.teamA) {
+        setTeamAScore(prev => prev + 1);
+      } else {
+        setTeamBScore(prev => prev + 1);
+      }
+
+      // Reset form
+      setSelectedPlayer('');
+      setIsOwnGoal(false);
+      setShowScorerForm(false);
+    } catch (error) {
+      console.error('Error adding scorer:', error);
+      // You might want to show an error message to the user here
+    }
+  };
+
+  const handleRemoveScorer = async (index: number) => {
+    const scorer = scorers[index];
+    
+    try {
+      // Decrement goals for non-own goals
+      if (!scorer.isOwnGoal) {
+        await incrementPlayerGoals(scorer.playerId, -1);
+      }
+
+      setScorers(prev => prev.filter((_, i) => i !== index));
+      
+      // Update total scores
+      if (scorer.team === match.teamA) {
+        setTeamAScore(prev => prev - scorer.count);
+      } else {
+        setTeamBScore(prev => prev - scorer.count);
+      }
+    } catch (error) {
+      console.error('Error removing scorer:', error);
+      // You might want to show an error message to the user here
+    }
+  };
+
   const handleTugOfWarWinner = async (winner: string) => {
     setLoading(true);
     try {
@@ -79,7 +174,9 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
         teamAScore: winner === match.teamA ? 1 : 0,
         teamBScore: winner === match.teamB ? 1 : 0,
         winner,
-        status: MatchStatus.COMPLETED
+        status: MatchStatus.COMPLETED,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString()
       });
       onUpdate?.();
     } catch (error) {
@@ -107,7 +204,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
           </span>
           {match.location && (
             <>
-              <MapPin className="h-4 w-4 text-accent-500" />
+              <Clock className="h-4 w-4 text-accent-500" />
               <span className="text-sm text-accent-600">{match.location}</span>
             </>
           )}
@@ -133,11 +230,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
           )}
         </div>
         <div className="text-center px-4">
-          {match.result ? (
-            <div className="text-sm text-accent-600">VS</div>
-          ) : (
-            <div className="text-sm text-accent-600">VS</div>
-          )}
+          <div className="text-sm text-accent-600">VS</div>
         </div>
         <div className="text-center flex-1">
           <h4 className="font-bold">{PlatoonNames[match.teamB]}</h4>
@@ -158,68 +251,168 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
         </div>
       </div>
 
-      {match.status === MatchStatus.SCHEDULED && (
-        <div className="mt-4 flex justify-center">
-          <Button
-            onClick={handleStartMatch}
-            variant="primary"
-            size="sm"
-          >
-            התחל משחק
-          </Button>
+      {/* Scorers List */}
+      {sportType === SportType.SOCCER && scorers.length > 0 && (
+        <div className="mt-4 border-t pt-4">
+          <h5 className="text-sm font-medium mb-2">כובשי השערים:</h5>
+          <div className="space-y-2">
+            {scorers.map((scorer, index) => (
+              <div key={index} className="flex items-center justify-between text-sm">
+                <div>
+                  <span className="font-medium">{scorer.playerName}</span>
+                  {scorer.isOwnGoal && <span className="text-error-500 mr-1">(שער עצמי)</span>}
+                </div>
+                {isEditing && (
+                  <button
+                    onClick={() => handleRemoveScorer(index)}
+                    className="text-error-500 hover:text-error-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {match.status === MatchStatus.IN_PROGRESS && (
-        <div className="mt-4 flex justify-center space-x-2">
-          {sportType === SportType.TUG_OF_WAR ? (
+      {user?.isAdmin && (
+        <div className="mt-4 flex justify-center">
+          {match.status === MatchStatus.SCHEDULED && (
+            <Button
+              onClick={handleStartMatch}
+              variant="primary"
+              size="sm"
+            >
+              התחל משחק
+            </Button>
+          )}
+
+          {match.status === MatchStatus.IN_PROGRESS && (
             <div className="flex space-x-2">
-              <Button
-                onClick={() => handleTugOfWarWinner(match.teamA)}
-                variant="primary"
-                size="sm"
-                isLoading={loading}
-              >
-                {PlatoonNames[match.teamA]} ניצח
-              </Button>
-              <Button
-                onClick={() => handleTugOfWarWinner(match.teamB)}
-                variant="primary"
-                size="sm"
-                isLoading={loading}
-              >
-                {PlatoonNames[match.teamB]} ניצח
-              </Button>
-            </div>
-          ) : (
-            <div className="flex space-x-2">
-              {isEditing ? (
-                <>
+              {sportType === SportType.TUG_OF_WAR ? (
+                <div className="flex space-x-2">
                   <Button
-                    onClick={handleUpdateScore}
+                    onClick={() => handleTugOfWarWinner(match.teamA)}
                     variant="primary"
                     size="sm"
                     isLoading={loading}
                   >
-                    עדכן תוצאה
+                    {PlatoonNames[match.teamA]} ניצח
                   </Button>
                   <Button
-                    onClick={handleCompleteMatch}
-                    variant="accent"
+                    onClick={() => handleTugOfWarWinner(match.teamB)}
+                    variant="primary"
                     size="sm"
                     isLoading={loading}
                   >
-                    סיים משחק
+                    {PlatoonNames[match.teamB]} ניצח
                   </Button>
-                </>
+                </div>
               ) : (
-                <Button
-                  onClick={() => setIsEditing(true)}
-                  variant="outline"
-                  size="sm"
-                >
-                  ערוך תוצאה
-                </Button>
+                <div className="flex flex-col w-full">
+                  {isEditing ? (
+                    <>
+                      {/* Soccer Scoring Form */}
+                      {sportType === SportType.SOCCER && (
+                        <div className="mb-4">
+                          {showScorerForm ? (
+                            <div className="space-y-2">
+                              <div className="flex space-x-2">
+                                <select
+                                  value={selectedTeam}
+                                  onChange={(e) => setSelectedTeam(e.target.value)}
+                                  className="flex-1 px-3 py-2 border rounded"
+                                >
+                                  <option value={match.teamA}>{PlatoonNames[match.teamA]}</option>
+                                  <option value={match.teamB}>{PlatoonNames[match.teamB]}</option>
+                                </select>
+                                <select
+                                  value={selectedPlayer}
+                                  onChange={(e) => setSelectedPlayer(e.target.value)}
+                                  className="flex-1 px-3 py-2 border rounded"
+                                >
+                                  <option value="">בחר שחקן</option>
+                                  {availablePlayers
+                                    .filter(p => !isOwnGoal ? p.platoon === selectedTeam : p.platoon !== selectedTeam)
+                                    .map(player => (
+                                      <option key={player.id} value={player.id}>
+                                        {player.name}
+                                      </option>
+                                    ))
+                                  }
+                                </select>
+                              </div>
+                              <div className="flex items-center">
+                                <label className="flex items-center text-sm">
+                                  <input
+                                    type="checkbox"
+                                    checked={isOwnGoal}
+                                    onChange={(e) => setIsOwnGoal(e.target.checked)}
+                                    className="mr-2"
+                                  />
+                                  שער עצמי
+                                </label>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button
+                                  onClick={handleAddScorer}
+                                  variant="primary"
+                                  size="sm"
+                                  className="flex-1"
+                                >
+                                  הוסף שער
+                                </Button>
+                                <Button
+                                  onClick={() => setShowScorerForm(false)}
+                                  variant="outline"
+                                  size="sm"
+                                >
+                                  ביטול
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <Button
+                              onClick={() => setShowScorerForm(true)}
+                              variant="outline"
+                              size="sm"
+                              leftIcon={<Plus className="h-4 w-4" />}
+                            >
+                              הוסף שער
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex space-x-2">
+                        <Button
+                          onClick={handleUpdateScore}
+                          variant="primary"
+                          size="sm"
+                          isLoading={loading}
+                        >
+                          עדכן תוצאה
+                        </Button>
+                        <Button
+                          onClick={handleCompleteMatch}
+                          variant="accent"
+                          size="sm"
+                          isLoading={loading}
+                        >
+                          סיים משחק
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <Button
+                      onClick={() => setIsEditing(true)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      ערוך תוצאה
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           )}

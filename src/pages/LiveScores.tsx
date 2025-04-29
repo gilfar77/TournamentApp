@@ -38,12 +38,14 @@ const LiveScores: React.FC = () => {
   }, []);
 
   const getMatchDuration = (match: Match) => {
-    // Use actualStartTime if available, otherwise fall back to scheduled startTime
-    const start = new Date(match.result?.actualStartTime || match.startTime);
-    const diff = Math.floor((currentTime.getTime() - start.getTime()) / 1000); // Seconds
+    if (!match.result?.startedAt) return '00:00';
+    
+    const start = new Date(match.result.startedAt);
+    const end = match.result?.endedAt ? new Date(match.result.endedAt) : currentTime;
+    const diff = Math.floor((end.getTime() - start.getTime()) / 1000); // Seconds
     const minutes = Math.floor(diff / 60);
     const seconds = diff % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   if (loading) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ChevronDown } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
 
@@ -11,15 +11,19 @@ const Header: React.FC = () => {
 
   const navigation = [
     { name: 'ראשי', path: '/' },
-    { name: 'תוצאות חיות', path: '/live' },
     { name: 'טורנירים', path: '/tournaments' },
+    { name: 'תוצאות חיות', path: '/live' },
+    { name: 'טבלת דירוג', path: '/standings' },
     { name: 'שחקנים', path: '/players' },
-    { name: 'מציונים', path: '/standings' },
-    ...(user ? [{ name: 'לוח בקרה', path: '/dashboard' }] : []),
-    ...(user?.isAdmin ? [{ name: 'ניהול', path: '/admin' }] : []),
+    { name: 'ניהול', path: '/admin', requireAdmin: true },
   ];
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+
+  const filteredNavigation = navigation.filter(item => {
+    if (item.requireAdmin) return user?.isAdmin;
+    return true;
+  });
 
   return (
     <header className="bg-primary-500 text-white shadow-header sticky top-0 z-50">
@@ -42,7 +46,7 @@ const Header: React.FC = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            {navigation.map((item) => (
+            {filteredNavigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.path}
@@ -106,7 +110,7 @@ const Header: React.FC = () => {
       {isMenuOpen && (
         <div className="md:hidden bg-primary-600 animate-in">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            {navigation.map((item) => (
+            {filteredNavigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.path}

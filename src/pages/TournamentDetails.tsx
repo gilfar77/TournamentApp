@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Trophy, Users, Calendar, Clock, MapPin, Trash2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { getTournamentById, deleteTournament, updateTournamentGroups } from '../services/tournamentService';
 import { Tournament, Match, MatchStage, SportNames, PlatoonNames, SportType, Platoon } from '../types';
 import Card from '../components/ui/Card';
@@ -10,6 +11,7 @@ import GroupStandings from '../components/tournament/GroupStandings';
 import GroupDrawAnimation from '../components/tournament/GroupDrawAnimation';
 
 const TournamentDetails: React.FC = () => {
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -25,7 +27,6 @@ const TournamentDetails: React.FC = () => {
       try {
         const data = await getTournamentById(id);
         setTournament(data);
-        // Only show draw animation if groups are empty
         setShowDrawAnimation(data?.groups?.every(group => group.teams.length === 0) ?? false);
       } catch (err) {
         console.error('Error fetching tournament:', err);
@@ -233,7 +234,7 @@ const TournamentDetails: React.FC = () => {
 
   return (
     <>
-      {showDrawAnimation && tournament.groups && (
+      {showDrawAnimation && tournament?.groups && user?.isAdmin && (
         <GroupDrawAnimation
           teams={Object.values(Platoon)}
           onComplete={handleDrawComplete}
@@ -246,23 +247,25 @@ const TournamentDetails: React.FC = () => {
             <Trophy className="h-8 w-8 text-primary-500 mr-3" />
             <h1 className="text-3xl font-bold">{tournament.name}</h1>
           </div>
-          <div className="flex items-center space-x-4">
-            <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-700">
-              {tournament.status === 'upcoming' && 'קרוב'}
-              {tournament.status === 'group_stage' && 'שלב הבתים'}
-              {tournament.status === 'knockout_stage' && 'שלב הנוק-אאוט'}
-              {tournament.status === 'completed' && 'הסתיים'}
-            </span>
-            <Button
-              variant="outline"
-              onClick={handleDelete}
-              isLoading={isDeleting}
-              className="text-error-500 border-error-500 hover:bg-error-50"
-              leftIcon={<Trash2 className="h-4 w-4" />}
-            >
-              מחק טורניר
-            </Button>
-          </div>
+          {user?.isAdmin && (
+            <div className="flex items-center space-x-4">
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-700">
+                {tournament.status === 'upcoming' && 'קרוב'}
+                {tournament.status === 'group_stage' && 'שלב הבתים'}
+                {tournament.status === 'knockout_stage' && 'שלב הנוק-אאוט'}
+                {tournament.status === 'completed' && 'הסתיים'}
+              </span>
+              <Button
+                variant="outline"
+                onClick={handleDelete}
+                isLoading={isDeleting}
+                className="text-error-500 border-error-500 hover:bg-error-50"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+              >
+                מחק טורניר
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="mb-8">

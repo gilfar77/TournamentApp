@@ -13,7 +13,7 @@ export enum Platoon {
   PALSAR = 'palsar',
   PALNAT = 'palnat',
   PALTAZ = 'paltaz',
-  PALSAM = 'palsam',
+  MAFGAD = 'mafgad', // Changed from PALSAM
   MESAYAAT = 'mesayaat',
 }
 
@@ -22,7 +22,7 @@ export const PlatoonNames: Record<Platoon, string> = {
   [Platoon.PALSAR]: 'פלס"ר',
   [Platoon.PALNAT]: 'פלנ"ט',
   [Platoon.PALTAZ]: 'פלת"ץ',
-  [Platoon.PALSAM]: 'פלס"ם',
+  [Platoon.MAFGAD]: 'מפג"ד', // Changed from פלס"ם
   [Platoon.MESAYAAT]: 'מסייעת',
 };
 
@@ -146,12 +146,22 @@ export enum MatchStage {
   FINAL = 'final',
 }
 
+export interface PlayerScore {
+  playerId: string;
+  playerName: string;
+  team: string;
+  count: number;
+  isOwnGoal?: boolean;
+}
+
 export interface MatchResult {
   teamAScore: number;
   teamBScore: number;
   winner: string | null; // Team ID
-  status?: MatchStatus;  // Add status field
-  actualStartTime?: Date | string; // Add actual start time
+  status?: MatchStatus;
+  startedAt?: string;  // Actual match start time
+  endedAt?: string;    // Actual match end time
+  scorers?: PlayerScore[]; // Players who scored
   details?: {
     periods?: number[];   // Basketball/Soccer period scores
     sets?: number[][];    // Volleyball set scores

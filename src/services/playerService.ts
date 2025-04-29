@@ -10,7 +10,8 @@ import {
   where,
   orderBy,
   Timestamp,
-  serverTimestamp
+  serverTimestamp,
+  increment
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Player, PlayerStats } from '../types';
@@ -47,6 +48,19 @@ export const updatePlayer = async (id: string, data: Partial<Player>): Promise<v
     });
   } catch (error) {
     console.error('Error updating player:', error);
+    throw error;
+  }
+};
+
+export const incrementPlayerGoals = async (playerId: string, amount: number = 1): Promise<void> => {
+  try {
+    const playerRef = doc(playersRef, playerId);
+    await updateDoc(playerRef, {
+      'stats.goalsScored': increment(amount),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error incrementing player goals:', error);
     throw error;
   }
 };

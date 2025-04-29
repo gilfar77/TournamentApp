@@ -39,7 +39,7 @@ A tournament management system for Sayeret Carmeli, enabling the creation and ma
 
 Add these security rules in the Firebase Console under "Rules" in Firestore:
 
-```js
+\`\`\`js
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -87,56 +87,56 @@ service cloud.firestore {
     }
   }
 }
-```
+\`\`\`
 
 ### 5. Configure Web Application
 
-1. In the Firebase Console, click the web icon (`</>`) on the project overview page
+1. In the Firebase Console, click the web icon (\`</>\`) on the project overview page
 2. Register your app with a nickname
 3. Copy the Firebase configuration values
 
 ### 6. Set Environment Variables
 
-1. Copy `.env.example` to a new file named `.env`
+1. Copy \`.env.example\` to a new file named \`.env\`
 2. Fill in the environment variables with your Firebase configuration:
 
-```
+\`\`\`
 VITE_FIREBASE_API_KEY=your_api_key
 VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
 VITE_FIREBASE_PROJECT_ID=your_project_id
 VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
 VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
-```
+\`\`\`
 
 ### 7. Configure Admin Access
 
-Update the admin emails list in `.env`:
+Update the admin emails list in \`.env\`:
 
-```
+\`\`\`
 VITE_ADMIN_EMAILS=admin@example.com,another-admin@example.com
-```
+\`\`\`
 
 ### 8. Run the Application
 
 Install dependencies and start the development server:
 
-```bash
+\`\`\`bash
 npm install
 npm run dev
-```
+\`\`\`
 
 ### 9. Player Import Format
 
 To import players in bulk, prepare a CSV file with the following columns:
 
-- `firstName`: Player's first name
-- `lastName`: Player's last name
-- `platoon`: One of: palsar, palchan, palnat, palsam, paltaz, mesayaat
-- `sportBranch`: Comma-separated list of sports: basketball, soccer, volleyball, tug_of_war, running
-- `isRunner`: true/false indicating participation in 100m run
+- \`firstName\`: Player's first name
+- \`lastName\`: Player's last name
+- \`platoon\`: One of: palsar, palchan, palnat, mafgad, paltaz, mesayaat
+- \`sportBranch\`: Comma-separated list of sports: basketball, soccer, volleyball, tug_of_war, running
+- \`isRunner\`: true/false indicating participation in 100m run
 
-Example template is provided in `public/player_import_template.csv`
+Example template is provided in \`public/player_import_template.csv\`
 
 ## Technologies Used
 
@@ -150,8 +150,8 @@ Example template is provided in `public/player_import_template.csv`
 
 ## Project Structure
 
-- `/src/components`: React components
-- `/src/context`: Context providers
-- `/src/services`: Firebase and API services
-- `/src/types`: TypeScript type definitions
-- `/src/pages`: Page components
+- \`/src/components\`: React components
+- \`/src/context\`: Context providers
+- \`/src/services\`: Firebase and API services
+- \`/src/types\`: TypeScript type definitions
+- \`/src/pages\`: Page components
