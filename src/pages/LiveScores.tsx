@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Clock, Users, CheckCircle } from 'lucide-react';
-import { Tournament, Match, SportNames, PlatoonNames, MatchStatus } from '../types';
+import { Tournament, Match, SportNames, PlatoonNames, MatchStatus, Platoon } from '../types';
 import { getAllTournaments } from '../services/tournamentService';
+import { getAllPlayers } from '../services/playerService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import TeamRosterModal from '../components/match/TeamRosterModal';
 
 type MatchFilter = 'live' | 'upcoming' | 'completed' | 'all';
 
@@ -13,6 +15,11 @@ const LiveScores: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [filter, setFilter] = useState<MatchFilter>('live');
+  const [showTeamAModal, setShowTeamAModal] = useState(false);
+  const [showTeamBModal, setShowTeamBModal] = useState(false);
+  const [teamAPlayers, setTeamAPlayers] = useState<any[]>([]);
+  const [teamBPlayers, setTeamBPlayers] = useState<any[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<Platoon | null>(null);
 
   useEffect(() => {
     const fetchTournaments = async () => {
@@ -36,6 +43,25 @@ const LiveScores: React.FC = () => {
       clearInterval(timeInterval);
     };
   }, []);
+
+  const handleTeamClick = async (platoon: Platoon, isTeamA: boolean) => {
+    try {
+      const players = await getAllPlayers();
+      const teamPlayers = players.filter(p => p.platoon === platoon);
+      
+      if (isTeamA) {
+        setTeamAPlayers(teamPlayers);
+        setSelectedTeam(platoon);
+        setShowTeamAModal(true);
+      } else {
+        setTeamBPlayers(teamPlayers);
+        setSelectedTeam(platoon);
+        setShowTeamBModal(true);
+      }
+    } catch (error) {
+      console.error('Error fetching players:', error);
+    }
+  };
 
   const getMatchDuration = (match: Match) => {
     if (!match.result?.startedAt) return '00:00';
@@ -85,10 +111,11 @@ const LiveScores: React.FC = () => {
     }
   }).sort((a, b) => {
     // Sort by status priority and then by start time
-    const statusPriority = {
+    const statusPriority: Record<MatchStatus, number> = {
       [MatchStatus.IN_PROGRESS]: 0,
       [MatchStatus.SCHEDULED]: 1,
       [MatchStatus.COMPLETED]: 2,
+      [MatchStatus.CANCELLED]: 3
     };
     
     const statusDiff = statusPriority[a.match.status] - statusPriority[b.match.status];
@@ -188,7 +215,12 @@ const LiveScores: React.FC = () => {
                     {match.stage === 'final' && 'גמר'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium">{PlatoonNames[match.teamA]}</div>
+                    <button
+                      onClick={() => handleTeamClick(match.teamA as Platoon, true)}
+                      className="font-medium hover:text-primary-500 transition-colors"
+                    >
+                      {PlatoonNames[match.teamA as Platoon]}
+                    </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     {match.status !== MatchStatus.SCHEDULED ? (
@@ -200,7 +232,12 @@ const LiveScores: React.FC = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium">{PlatoonNames[match.teamB]}</div>
+                    <button
+                      onClick={() => handleTeamClick(match.teamB as Platoon, false)}
+                      className="font-medium hover:text-primary-500 transition-colors"
+                    >
+                      {PlatoonNames[match.teamB as Platoon]}
+                    </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {match.status === MatchStatus.IN_PROGRESS && (
@@ -225,6 +262,39 @@ const LiveScores: React.FC = () => {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Team Roster Modals */}
+      {selectedTeam && (
+        <>
+          <TeamRosterModal
+            platoon={selectedTeam}
+            isOpen={showTeamAModal}
+            onClose={() => setShowTeamAModal(false)}
+            statistics={{
+              wins: 0, // TODO: Calculate from matches
+              draws: 0,
+              losses: 0,
+              goalsFor: 0,
+              goalsAgainst: 0
+            }}
+            players={teamAPlayers}
+          />
+
+          <TeamRosterModal
+            platoon={selectedTeam}
+            isOpen={showTeamBModal}
+            onClose={() => setShowTeamBModal(false)}
+            statistics={{
+              wins: 0, // TODO: Calculate from matches
+              draws: 0,
+              losses: 0,
+              goalsFor: 0,
+              goalsAgainst: 0
+            }}
+            players={teamBPlayers}
+          />
+        </>
       )}
     </div>
   );
