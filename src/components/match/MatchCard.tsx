@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Plus, X, MapPin } from 'lucide-react';
-import { Match, MatchStage, MatchStatus, SportType, PlatoonNames, Platoon, PlayerScore } from '../../types';
+import { Clock, Plus, X } from 'lucide-react';
+import { Match, MatchStage, MatchStatus, SportType, PlatoonNames, PlayerScore } from '../../types';
 import { updateMatchResult } from '../../services/tournamentService';
 import { getAllPlayers, incrementPlayerGoals } from '../../services/playerService';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
-import TeamRosterModal from './TeamRosterModal';
+import { TeamRosterPopup } from '../team/TeamRosterPopup';
 
 interface MatchCardProps {
   match: Match;
@@ -27,11 +27,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [isOwnGoal, setIsOwnGoal] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<string>(match.teamA);
-  const [showTeamAModal, setShowTeamAModal] = useState(false);
-  const [showTeamBModal, setShowTeamBModal] = useState(false);
-  const [teamAPlayers, setTeamAPlayers] = useState<any[]>([]);
-  const [teamBPlayers, setTeamBPlayers] = useState<any[]>([]);
-  const [tugOfWarWinner, setTugOfWarWinner] = useState<Platoon | null>(null);
+  const [showRoster, setShowRoster] = useState<string | null>(null);
 
   useEffect(() => {
     if (sportType === SportType.SOCCER) {
@@ -51,45 +47,61 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
     }
   }, [sportType]);
 
-  const handleTeamClick = async (platoon: Platoon, isTeamA: boolean) => {
+  const handleStartMatch = async () => {
     try {
-      const players = await getAllPlayers();
-      const teamPlayers = players.filter(p => p.platoon === platoon);
-      
-      if (isTeamA) {
-        setTeamAPlayers(teamPlayers);
-        setShowTeamAModal(true);
-      } else {
-        setTeamBPlayers(teamPlayers);
-        setShowTeamBModal(true);
-      }
+      await updateMatchResult(tournamentId, match.id, {
+        teamAScore: 0,
+        teamBScore: 0,
+        winner: null,
+        status: MatchStatus.IN_PROGRESS,
+        startedAt: new Date().toISOString(),
+        scorers: []
+      });
+      onUpdate?.();
     } catch (error) {
-      console.error('Error fetching players:', error);
+      console.error('Error starting match:', error);
     }
   };
 
-  const handleUpdateResult = async () => {
-    if (!user) return;
-    
+  const handleUpdateScore = async () => {
     setLoading(true);
     try {
-      const result = {
+      await updateMatchResult(tournamentId, match.id, {
+        ...match.result,
         teamAScore,
         teamBScore,
-        scorers: [],
-        status: MatchStatus.IN_PROGRESS,
-        winner: null,
-        startedAt: new Date().toISOString(),
-        endedAt: undefined,
-        details: undefined,
-        notes: undefined
-      };
-      
-      await updateMatchResult(tournamentId, match.id, result);
+        scorers,
+        status: MatchStatus.IN_PROGRESS
+      });
       setIsEditing(false);
       onUpdate?.();
     } catch (error) {
-      console.error('Error updating match result:', error);
+      console.error('Error updating score:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompleteMatch = async () => {
+    setLoading(true);
+    try {
+      let winner = null;
+      if (teamAScore > teamBScore) winner = match.teamA;
+      else if (teamBScore > teamAScore) winner = match.teamB;
+
+      await updateMatchResult(tournamentId, match.id, {
+        ...match.result,
+        teamAScore,
+        teamBScore,
+        winner,
+        scorers,
+        status: MatchStatus.COMPLETED,
+        endedAt: new Date().toISOString()
+      });
+      setIsEditing(false);
+      onUpdate?.();
+    } catch (error) {
+      console.error('Error completing match:', error);
     } finally {
       setLoading(false);
     }
@@ -102,7 +114,6 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
     if (!player) return;
 
     try {
-      // Only increment goals for non-own goals
       if (!isOwnGoal) {
         await incrementPlayerGoals(player.id);
       }
@@ -117,20 +128,17 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
 
       setScorers(prev => [...prev, newScorer]);
       
-      // Update total scores
       if (selectedTeam === match.teamA) {
         setTeamAScore(prev => prev + 1);
       } else {
         setTeamBScore(prev => prev + 1);
       }
 
-      // Reset form
       setSelectedPlayer('');
       setIsOwnGoal(false);
       setShowScorerForm(false);
     } catch (error) {
       console.error('Error adding scorer:', error);
-      // You might want to show an error message to the user here
     }
   };
 
@@ -138,14 +146,12 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
     const scorer = scorers[index];
     
     try {
-      // Decrement goals for non-own goals
       if (!scorer.isOwnGoal) {
         await incrementPlayerGoals(scorer.playerId, -1);
       }
 
       setScorers(prev => prev.filter((_, i) => i !== index));
       
-      // Update total scores
       if (scorer.team === match.teamA) {
         setTeamAScore(prev => prev - scorer.count);
       } else {
@@ -153,7 +159,6 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
       }
     } catch (error) {
       console.error('Error removing scorer:', error);
-      // You might want to show an error message to the user here
     }
   };
 
@@ -176,6 +181,16 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
     }
   };
 
+  const teamAScorers = scorers.filter(scorer => 
+    (scorer.team === match.teamA && !scorer.isOwnGoal) || 
+    (scorer.team === match.teamB && scorer.isOwnGoal)
+  );
+
+  const teamBScorers = scorers.filter(scorer => 
+    (scorer.team === match.teamB && !scorer.isOwnGoal) || 
+    (scorer.team === match.teamA && scorer.isOwnGoal)
+  );
+
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -194,87 +209,110 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
           </span>
           {match.location && (
             <>
-              <MapPin className="h-4 w-4 text-accent-500" />
+              <Clock className="h-4 w-4 text-accent-500" />
               <span className="text-sm text-accent-600">{match.location}</span>
             </>
           )}
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex-1 text-right">
+      <div className="flex items-center justify-between">
+        <div className="text-center flex-1">
           <button
-            onClick={() => handleTeamClick(match.teamA as Platoon, true)}
-            className="text-lg font-medium hover:text-primary-500 transition-colors"
+            onClick={() => setShowRoster(match.teamA)}
+            className="font-bold hover:text-primary-600 transition-colors"
           >
-            {PlatoonNames[match.teamA as Platoon]}
+            {PlatoonNames[match.teamA]}
           </button>
-        </div>
-        <div className="mx-4 text-2xl font-bold">
-          {match.status === MatchStatus.COMPLETED ? (
-            `${match.result?.teamAScore || 0} - ${match.result?.teamBScore || 0}`
-          ) : isEditing ? (
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                value={teamAScore}
-                onChange={(e) => setTeamAScore(Number(e.target.value))}
-                className="w-16 text-center border rounded"
-                min="0"
-              />
-              <span>-</span>
-              <input
-                type="number"
-                value={teamBScore}
-                onChange={(e) => setTeamBScore(Number(e.target.value))}
-                className="w-16 text-center border rounded"
-                min="0"
-              />
+          {isEditing && sportType !== SportType.TUG_OF_WAR && (
+            <input
+              type="number"
+              min="0"
+              value={teamAScore}
+              onChange={(e) => setTeamAScore(parseInt(e.target.value) || 0)}
+              className="mt-2 w-20 px-2 py-1 border rounded"
+            />
+          )}
+          {!isEditing && (
+            <div className="text-2xl font-bold mt-2">
+              {match.result?.teamAScore || 0}
             </div>
-          ) : (
-            'vs'
+          )}
+          {/* Team A Scorers */}
+          {sportType === SportType.SOCCER && teamAScorers.length > 0 && (
+            <div className="mt-2 text-sm space-y-1">
+              {teamAScorers.map((scorer, index) => (
+                <div key={index} className="flex items-center justify-center">
+                  <span className="font-medium">
+                    {scorer.playerName}
+                    {scorer.isOwnGoal && <span className="text-error-500 mr-1">(שער עצמי)</span>}
+                  </span>
+                  {isEditing && (
+                    <button
+                      onClick={() => handleRemoveScorer(scorers.indexOf(scorer))}
+                      className="text-error-500 hover:text-error-700 mr-1"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
-        <div className="flex-1 text-left">
+        <div className="text-center px-4">
+          <div className="text-sm text-accent-600">VS</div>
+        </div>
+        <div className="text-center flex-1">
           <button
-            onClick={() => handleTeamClick(match.teamB as Platoon, false)}
-            className="text-lg font-medium hover:text-primary-500 transition-colors"
+            onClick={() => setShowRoster(match.teamB)}
+            className="font-bold hover:text-primary-600 transition-colors"
           >
-            {PlatoonNames[match.teamB as Platoon]}
+            {PlatoonNames[match.teamB]}
           </button>
+          {isEditing && sportType !== SportType.TUG_OF_WAR && (
+            <input
+              type="number"
+              min="0"
+              value={teamBScore}
+              onChange={(e) => setTeamBScore(parseInt(e.target.value) || 0)}
+              className="mt-2 w-20 px-2 py-1 border rounded"
+            />
+          )}
+          {!isEditing && (
+            <div className="text-2xl font-bold mt-2">
+              {match.result?.teamBScore || 0}
+            </div>
+          )}
+          {/* Team B Scorers */}
+          {sportType === SportType.SOCCER && teamBScorers.length > 0 && (
+            <div className="mt-2 text-sm space-y-1">
+              {teamBScorers.map((scorer, index) => (
+                <div key={index} className="flex items-center justify-center">
+                  <span className="font-medium">
+                    {scorer.playerName}
+                    {scorer.isOwnGoal && <span className="text-error-500 mr-1">(שער עצמי)</span>}
+                  </span>
+                  {isEditing && (
+                    <button
+                      onClick={() => handleRemoveScorer(scorers.indexOf(scorer))}
+                      className="text-error-500 hover:text-error-700 mr-1"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Scorers List */}
-      {sportType === SportType.SOCCER && scorers.length > 0 && (
-        <div className="mt-4 border-t pt-4">
-          <h5 className="text-sm font-medium mb-2">כובשי השערים:</h5>
-          <div className="space-y-2">
-            {scorers.map((scorer, index) => (
-              <div key={index} className="flex items-center justify-between text-sm">
-                <div>
-                  <span className="font-medium">{scorer.playerName}</span>
-                  {scorer.isOwnGoal && <span className="text-error-500 mr-1">(שער עצמי)</span>}
-                </div>
-                {isEditing && (
-                  <button
-                    onClick={() => handleRemoveScorer(index)}
-                    className="text-error-500 hover:text-error-700"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {user?.isAdmin && (
         <div className="mt-4 flex justify-center">
           {match.status === MatchStatus.SCHEDULED && (
             <Button
-              onClick={() => handleTeamClick(match.teamA as Platoon, true)}
+              onClick={handleStartMatch}
               variant="primary"
               size="sm"
             >
@@ -287,20 +325,20 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
               {sportType === SportType.TUG_OF_WAR ? (
                 <div className="flex space-x-2">
                   <Button
-                    onClick={() => handleTugOfWarWinner(match.teamA as string)}
+                    onClick={() => handleTugOfWarWinner(match.teamA)}
                     variant="primary"
                     size="sm"
                     isLoading={loading}
                   >
-                    {PlatoonNames[match.teamA as string]} ניצח
+                    {PlatoonNames[match.teamA]} ניצח
                   </Button>
                   <Button
-                    onClick={() => handleTugOfWarWinner(match.teamB as string)}
+                    onClick={() => handleTugOfWarWinner(match.teamB)}
                     variant="primary"
                     size="sm"
                     isLoading={loading}
                   >
-                    {PlatoonNames[match.teamB as string]} ניצח
+                    {PlatoonNames[match.teamB]} ניצח
                   </Button>
                 </div>
               ) : (
@@ -318,8 +356,8 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
                                   onChange={(e) => setSelectedTeam(e.target.value)}
                                   className="flex-1 px-3 py-2 border rounded"
                                 >
-                                  <option value={match.teamA}>{PlatoonNames[match.teamA as Platoon]}</option>
-                                  <option value={match.teamB}>{PlatoonNames[match.teamB as Platoon]}</option>
+                                  <option value={match.teamA}>{PlatoonNames[match.teamA]}</option>
+                                  <option value={match.teamB}>{PlatoonNames[match.teamB]}</option>
                                 </select>
                                 <select
                                   value={selectedPlayer}
@@ -380,12 +418,20 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
                       )}
                       <div className="flex space-x-2">
                         <Button
-                          onClick={handleUpdateResult}
+                          onClick={handleUpdateScore}
                           variant="primary"
                           size="sm"
                           isLoading={loading}
                         >
                           עדכן תוצאה
+                        </Button>
+                        <Button
+                          onClick={handleCompleteMatch}
+                          variant="accent"
+                          size="sm"
+                          isLoading={loading}
+                        >
+                          סיים משחק
                         </Button>
                       </div>
                     </>
@@ -411,34 +457,14 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
         </div>
       )}
 
-      {/* Team Roster Modals */}
-      <TeamRosterModal
-        platoon={match.teamA as Platoon}
-        isOpen={showTeamAModal}
-        onClose={() => setShowTeamAModal(false)}
-        statistics={{
-          wins: 0, // TODO: Calculate from matches
-          draws: 0,
-          losses: 0,
-          goalsFor: 0,
-          goalsAgainst: 0
-        }}
-        players={teamAPlayers}
-      />
-
-      <TeamRosterModal
-        platoon={match.teamB as Platoon}
-        isOpen={showTeamBModal}
-        onClose={() => setShowTeamBModal(false)}
-        statistics={{
-          wins: 0, // TODO: Calculate from matches
-          draws: 0,
-          losses: 0,
-          goalsFor: 0,
-          goalsAgainst: 0
-        }}
-        players={teamBPlayers}
-      />
+      {showRoster && (
+        <TeamRosterPopup
+          platoon={showRoster}
+          onClose={() => setShowRoster(null)}
+          players={availablePlayers.filter(p => p.platoon === showRoster)}
+          matches={[match]}
+        />
+      )}
     </Card>
   );
 };

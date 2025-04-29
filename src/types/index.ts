@@ -49,10 +49,8 @@ export interface Player {
   firstName: string;
   lastName: string;
   platoon: Platoon;
-  position?: string;
-  number?: number;
-  isRunner?: boolean;
   sportBranch: SportType[];
+  isRunner: boolean;
   stats: PlayerStats;
   createdAt: Date;
   updatedAt: Date;

@@ -1,41 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Clock, Users, CheckCircle } from 'lucide-react';
-import { Tournament, Match, SportNames, PlatoonNames, MatchStatus, Platoon } from '../types';
+import { Tournament, Match, SportNames, PlatoonNames, MatchStatus, Platoon, Player } from '../types';
 import { getAllTournaments } from '../services/tournamentService';
 import { getAllPlayers } from '../services/playerService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import TeamRosterModal from '../components/match/TeamRosterModal';
+import { TeamRosterPopup } from '../components/team/TeamRosterPopup';
 
 type MatchFilter = 'live' | 'upcoming' | 'completed' | 'all';
 
 const LiveScores: React.FC = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [filter, setFilter] = useState<MatchFilter>('live');
-  const [showTeamAModal, setShowTeamAModal] = useState(false);
-  const [showTeamBModal, setShowTeamBModal] = useState(false);
-  const [teamAPlayers, setTeamAPlayers] = useState<any[]>([]);
-  const [teamBPlayers, setTeamBPlayers] = useState<any[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState<Platoon | null>(null);
+  const [showRoster, setShowRoster] = useState<Platoon | null>(null);
 
   useEffect(() => {
-    const fetchTournaments = async () => {
+    const fetchData = async () => {
       try {
-        const data = await getAllTournaments();
-        setTournaments(data);
+        const [tournamentsData, playersData] = await Promise.all([
+          getAllTournaments(),
+          getAllPlayers()
+        ]);
+        setTournaments(tournamentsData);
+        setPlayers(playersData);
       } catch (err) {
-        console.error('Error fetching tournaments:', err);
-        setError('אירעה שגיאה בטעינת הטורנירים');
+        console.error('Error fetching data:', err);
+        setError('אירעה שגיאה בטעינת הנתונים');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTournaments();
-    const fetchInterval = setInterval(fetchTournaments, 10000); // Refresh every 10 seconds
+    fetchData();
+    const fetchInterval = setInterval(fetchData, 10000); // Refresh every 10 seconds
     const timeInterval = setInterval(() => setCurrentTime(new Date()), 1000); // Update time every second
 
     return () => {
@@ -43,73 +44,6 @@ const LiveScores: React.FC = () => {
       clearInterval(timeInterval);
     };
   }, []);
-
-  const handleTeamClick = async (platoon: Platoon, isTeamA: boolean) => {
-    try {
-      const players = await getAllPlayers();
-      const teamPlayers = players
-        .filter(p => p.platoon === platoon)
-        .map(player => ({
-          id: player.id,
-          name: `${player.firstName} ${player.lastName}`,
-          platoon: player.platoon,
-          position: player.position,
-          number: player.number
-        }));
-
-      // Calculate team statistics from all matches
-      const teamMatches = allMatches.filter(({ match }) => 
-        match.teamA === platoon || match.teamB === platoon
-      );
-
-      const statistics = teamMatches.reduce((stats, { match }) => {
-        if (!match.result) return stats;
-
-        const isHomeTeam = match.teamA === platoon;
-        const teamScore = isHomeTeam ? match.result.teamAScore : match.result.teamBScore;
-        const opponentScore = isHomeTeam ? match.result.teamBScore : match.result.teamAScore;
-
-        if (match.status === MatchStatus.COMPLETED) {
-          stats.gamesPlayed++;
-          if (teamScore > opponentScore) {
-            stats.wins++;
-            stats.points += 3;
-          } else if (teamScore === opponentScore) {
-            stats.draws++;
-            stats.points += 1;
-          } else {
-            stats.losses++;
-          }
-          stats.goalsFor += teamScore;
-          stats.goalsAgainst += opponentScore;
-          stats.goalDifference = stats.goalsFor - stats.goalsAgainst;
-        }
-
-        return stats;
-      }, {
-        wins: 0,
-        draws: 0,
-        losses: 0,
-        points: 0,
-        gamesPlayed: 0,
-        goalsFor: 0,
-        goalsAgainst: 0,
-        goalDifference: 0
-      });
-      
-      if (isTeamA) {
-        setTeamAPlayers(teamPlayers);
-        setSelectedTeam(platoon);
-        setShowTeamAModal(true);
-      } else {
-        setTeamBPlayers(teamPlayers);
-        setSelectedTeam(platoon);
-        setShowTeamBModal(true);
-      }
-    } catch (error) {
-      console.error('Error fetching players:', error);
-    }
-  };
 
   const getMatchDuration = (match: Match) => {
     if (!match.result?.startedAt) return '00:00';
@@ -264,8 +198,8 @@ const LiveScores: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
-                      onClick={() => handleTeamClick(match.teamA as Platoon, true)}
-                      className="font-medium hover:text-primary-500 transition-colors"
+                      onClick={() => setShowRoster(match.teamA as Platoon)}
+                      className="font-medium hover:text-primary-600 transition-colors"
                     >
                       {PlatoonNames[match.teamA as Platoon]}
                     </button>
@@ -281,8 +215,8 @@ const LiveScores: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
-                      onClick={() => handleTeamClick(match.teamB as Platoon, false)}
-                      className="font-medium hover:text-primary-500 transition-colors"
+                      onClick={() => setShowRoster(match.teamB as Platoon)}
+                      className="font-medium hover:text-primary-600 transition-colors"
                     >
                       {PlatoonNames[match.teamB as Platoon]}
                     </button>
@@ -312,37 +246,14 @@ const LiveScores: React.FC = () => {
         </div>
       )}
 
-      {/* Team Roster Modals */}
-      {selectedTeam && (
-        <>
-          <TeamRosterModal
-            platoon={selectedTeam}
-            isOpen={showTeamAModal}
-            onClose={() => setShowTeamAModal(false)}
-            statistics={{
-              wins: teamAPlayers.length > 0 ? teamAPlayers[0].wins || 0 : 0,
-              draws: teamAPlayers.length > 0 ? teamAPlayers[0].draws || 0 : 0,
-              losses: teamAPlayers.length > 0 ? teamAPlayers[0].losses || 0 : 0,
-              goalsFor: teamAPlayers.length > 0 ? teamAPlayers[0].goalsFor || 0 : 0,
-              goalsAgainst: teamAPlayers.length > 0 ? teamAPlayers[0].goalsAgainst || 0 : 0
-            }}
-            players={teamAPlayers}
-          />
-
-          <TeamRosterModal
-            platoon={selectedTeam}
-            isOpen={showTeamBModal}
-            onClose={() => setShowTeamBModal(false)}
-            statistics={{
-              wins: teamBPlayers.length > 0 ? teamBPlayers[0].wins || 0 : 0,
-              draws: teamBPlayers.length > 0 ? teamBPlayers[0].draws || 0 : 0,
-              losses: teamBPlayers.length > 0 ? teamBPlayers[0].losses || 0 : 0,
-              goalsFor: teamBPlayers.length > 0 ? teamBPlayers[0].goalsFor || 0 : 0,
-              goalsAgainst: teamBPlayers.length > 0 ? teamBPlayers[0].goalsAgainst || 0 : 0
-            }}
-            players={teamBPlayers}
-          />
-        </>
+      {showRoster && (
+        <TeamRosterPopup
+          platoon={showRoster}
+          onClose={() => setShowRoster(null)}
+          players={players.filter(p => p.platoon === showRoster)}
+          matches={tournaments.flatMap(t => t.matches)}
+          tournaments={tournaments}
+        />
       )}
     </div>
   );
