@@ -47,7 +47,55 @@ const LiveScores: React.FC = () => {
   const handleTeamClick = async (platoon: Platoon, isTeamA: boolean) => {
     try {
       const players = await getAllPlayers();
-      const teamPlayers = players.filter(p => p.platoon === platoon);
+      const teamPlayers = players
+        .filter(p => p.platoon === platoon)
+        .map(player => ({
+          id: player.id,
+          name: `${player.firstName} ${player.lastName}`,
+          platoon: player.platoon,
+          position: player.position,
+          number: player.number
+        }));
+
+      // Calculate team statistics from all matches
+      const teamMatches = allMatches.filter(({ match }) => 
+        match.teamA === platoon || match.teamB === platoon
+      );
+
+      const statistics = teamMatches.reduce((stats, { match }) => {
+        if (!match.result) return stats;
+
+        const isHomeTeam = match.teamA === platoon;
+        const teamScore = isHomeTeam ? match.result.teamAScore : match.result.teamBScore;
+        const opponentScore = isHomeTeam ? match.result.teamBScore : match.result.teamAScore;
+
+        if (match.status === MatchStatus.COMPLETED) {
+          stats.gamesPlayed++;
+          if (teamScore > opponentScore) {
+            stats.wins++;
+            stats.points += 3;
+          } else if (teamScore === opponentScore) {
+            stats.draws++;
+            stats.points += 1;
+          } else {
+            stats.losses++;
+          }
+          stats.goalsFor += teamScore;
+          stats.goalsAgainst += opponentScore;
+          stats.goalDifference = stats.goalsFor - stats.goalsAgainst;
+        }
+
+        return stats;
+      }, {
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        points: 0,
+        gamesPlayed: 0,
+        goalsFor: 0,
+        goalsAgainst: 0,
+        goalDifference: 0
+      });
       
       if (isTeamA) {
         setTeamAPlayers(teamPlayers);
@@ -272,11 +320,11 @@ const LiveScores: React.FC = () => {
             isOpen={showTeamAModal}
             onClose={() => setShowTeamAModal(false)}
             statistics={{
-              wins: 0, // TODO: Calculate from matches
-              draws: 0,
-              losses: 0,
-              goalsFor: 0,
-              goalsAgainst: 0
+              wins: teamAPlayers.length > 0 ? teamAPlayers[0].wins || 0 : 0,
+              draws: teamAPlayers.length > 0 ? teamAPlayers[0].draws || 0 : 0,
+              losses: teamAPlayers.length > 0 ? teamAPlayers[0].losses || 0 : 0,
+              goalsFor: teamAPlayers.length > 0 ? teamAPlayers[0].goalsFor || 0 : 0,
+              goalsAgainst: teamAPlayers.length > 0 ? teamAPlayers[0].goalsAgainst || 0 : 0
             }}
             players={teamAPlayers}
           />
@@ -286,11 +334,11 @@ const LiveScores: React.FC = () => {
             isOpen={showTeamBModal}
             onClose={() => setShowTeamBModal(false)}
             statistics={{
-              wins: 0, // TODO: Calculate from matches
-              draws: 0,
-              losses: 0,
-              goalsFor: 0,
-              goalsAgainst: 0
+              wins: teamBPlayers.length > 0 ? teamBPlayers[0].wins || 0 : 0,
+              draws: teamBPlayers.length > 0 ? teamBPlayers[0].draws || 0 : 0,
+              losses: teamBPlayers.length > 0 ? teamBPlayers[0].losses || 0 : 0,
+              goalsFor: teamBPlayers.length > 0 ? teamBPlayers[0].goalsFor || 0 : 0,
+              goalsAgainst: teamBPlayers.length > 0 ? teamBPlayers[0].goalsAgainst || 0 : 0
             }}
             players={teamBPlayers}
           />
