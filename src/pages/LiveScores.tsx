@@ -37,8 +37,9 @@ const LiveScores: React.FC = () => {
     };
   }, []);
 
-  const getMatchDuration = (startTime: Date | string) => {
-    const start = new Date(startTime);
+  const getMatchDuration = (match: Match) => {
+    // Use actualStartTime if available, otherwise fall back to scheduled startTime
+    const start = new Date(match.result?.actualStartTime || match.startTime);
     const diff = Math.floor((currentTime.getTime() - start.getTime()) / 1000); // Seconds
     const minutes = Math.floor(diff / 60);
     const seconds = diff % 60;
@@ -166,7 +167,7 @@ const LiveScores: React.FC = () => {
                     {match.status === MatchStatus.IN_PROGRESS ? (
                       <div className="flex items-center text-primary-600">
                         <Clock className="h-4 w-4 mr-1" />
-                        {getMatchDuration(match.startTime)}
+                        {getMatchDuration(match)}
                       </div>
                     ) : (
                       new Date(match.startTime).toLocaleTimeString('he-IL', {

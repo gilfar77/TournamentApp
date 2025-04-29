@@ -12,6 +12,7 @@ import TournamentDetails from './pages/TournamentDetails';
 import Dashboard from './pages/Dashboard';
 import Players from './pages/Players';
 import LiveScores from './pages/LiveScores';
+import Standings from './pages/Standings';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/live" element={<LiveScores />} />
+              <Route path="/standings" element={<Standings />} />
               
               {/* Protected Routes */}
               <Route path="/tournaments" element={

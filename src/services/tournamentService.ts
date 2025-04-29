@@ -188,6 +188,79 @@ const generateGroupMatches = (
   return [...matches, ...knockoutMatches];
 };
 
+const calculateGroupStandings = (matches: Match[], groupId: string) => {
+  const standings: Record<string, { points: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number }> = {};
+
+  // Initialize standings for all teams in the group
+  matches
+    .filter(m => m.groupId === groupId)
+    .forEach(match => {
+      if (!standings[match.teamA]) {
+        standings[match.teamA] = { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 };
+      }
+      if (!standings[match.teamB]) {
+        standings[match.teamB] = { points: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 };
+      }
+    });
+
+  // Calculate standings
+  matches
+    .filter(m => m.groupId === groupId && m.status === MatchStatus.COMPLETED && m.result)
+    .forEach(match => {
+      const { teamAScore, teamBScore } = match.result!;
+      
+      // Update goals
+      standings[match.teamA].goalsFor += teamAScore;
+      standings[match.teamA].goalsAgainst += teamBScore;
+      standings[match.teamB].goalsFor += teamBScore;
+      standings[match.teamB].goalsAgainst += teamAScore;
+
+      // Update points and record
+      if (teamAScore > teamBScore) {
+        standings[match.teamA].points += 3;
+        standings[match.teamA].wins += 1;
+        standings[match.teamB].losses += 1;
+      } else if (teamAScore < teamBScore) {
+        standings[match.teamB].points += 3;
+        standings[match.teamB].wins += 1;
+        standings[match.teamA].losses += 1;
+      } else {
+        standings[match.teamA].points += 1;
+        standings[match.teamB].points += 1;
+        standings[match.teamA].draws += 1;
+        standings[match.teamB].draws += 1;
+      }
+    });
+
+  // Sort standings
+  return Object.entries(standings)
+    .map(([team, stats]) => ({ team, ...stats }))
+    .sort((a, b) => {
+      // Sort by points
+      if (b.points !== a.points) return b.points - a.points;
+      // Sort by goal difference
+      const aGD = a.goalsFor - a.goalsAgainst;
+      const bGD = b.goalsFor - b.goalsAgainst;
+      if (bGD !== aGD) return bGD - aGD;
+      // Sort by goals scored
+      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+      // Sort by head-to-head (if applicable)
+      const headToHead = matches.find(m => 
+        m.groupId === groupId && 
+        ((m.teamA === a.team && m.teamB === b.team) || (m.teamA === b.team && m.teamB === a.team)) &&
+        m.status === MatchStatus.COMPLETED
+      );
+      if (headToHead?.result) {
+        if (headToHead.teamA === a.team) {
+          return headToHead.result.teamAScore - headToHead.result.teamBScore;
+        } else {
+          return headToHead.result.teamBScore - headToHead.result.teamAScore;
+        }
+      }
+      return 0;
+    });
+};
+
 // Tournament Management
 export const createTournament = async (tournament: Omit<Tournament, 'id' | 'teams' | 'matches' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   try {
@@ -412,6 +485,14 @@ export const updateMatchResult = async (tournamentId: string, matchId: string, r
     }
     const matchData = matchDoc.data() as Match;
     
+    // If this is the first time starting the match, store the actual start time
+    if (matchData.status === MatchStatus.SCHEDULED && result?.status === MatchStatus.IN_PROGRESS) {
+      result = {
+        ...result,
+        actualStartTime: new Date() // Store the current time as actual start time
+      };
+    }
+    
     // Update match result and status
     await updateDoc(matchRef, {
       result,
@@ -436,7 +517,23 @@ export const updateMatchResult = async (tournamentId: string, matchId: string, r
     if (!tournamentDoc.exists()) {
       throw new Error('Tournament not found');
     }
-    const tournamentData = tournamentDoc.data() as Tournament;
+    const data = tournamentDoc.data();
+    const tournamentData: Tournament = {
+      id: tournamentDoc.id,
+      name: data.name,
+      description: data.description,
+      sportType: data.sportType,
+      format: data.format,
+      status: data.status,
+      createdBy: data.createdBy,
+      startDate: data.startDate.toDate(),
+      endDate: data.endDate.toDate(),
+      createdAt: data.createdAt.toDate(),
+      updatedAt: data.updatedAt.toDate(),
+      teams: data.teams || [],
+      matches,
+      groups: data.groups || []
+    };
 
     // Check if this is the first match being started
     if (matchData.status === MatchStatus.SCHEDULED && result?.status === MatchStatus.IN_PROGRESS) {
@@ -453,6 +550,46 @@ export const updateMatchResult = async (tournamentId: string, matchId: string, r
     const allGroupMatchesCompleted = groupMatches.every((m: Match) => m.status === MatchStatus.COMPLETED);
     const hasGroupMatches = groupMatches.length > 0;
 
+    // If all group matches are completed, update semi-final matches
+    if (allGroupMatchesCompleted && hasGroupMatches) {
+      // Calculate group standings
+      const groupAStandings = calculateGroupStandings(matches, 'group-a');
+      const groupBStandings = calculateGroupStandings(matches, 'group-b');
+
+      // Get semi-final matches
+      const semiFinalMatches = matches.filter(m => m.stage === MatchStage.SEMI_FINAL);
+      
+      // Update semi-final teams
+      const batch = writeBatch(db);
+      semiFinalMatches.forEach(sfMatch => {
+        const matchRef = doc(collection(tournamentRef, 'matches'), sfMatch.id);
+        
+        if (sfMatch.id === 'sf1') {
+          // SF1: Winner Group A vs Runner-up Group B
+          batch.update(matchRef, {
+            teamA: groupAStandings[0].team,
+            teamB: groupBStandings[1].team,
+            updatedAt: serverTimestamp()
+          });
+        } else if (sfMatch.id === 'sf2') {
+          // SF2: Winner Group B vs Runner-up Group A
+          batch.update(matchRef, {
+            teamA: groupBStandings[0].team,
+            teamB: groupAStandings[1].team,
+            updatedAt: serverTimestamp()
+          });
+        }
+      });
+
+      await batch.commit();
+
+      // Update tournament status to knockout stage
+      await updateDoc(tournamentRef, {
+        status: TournamentStatus.KNOCKOUT_STAGE,
+        updatedAt: serverTimestamp()
+      });
+    }
+
     // Check if all matches are completed
     const allMatchesCompleted = matches.every((m: Match) => m.status === MatchStatus.COMPLETED);
 
@@ -460,12 +597,6 @@ export const updateMatchResult = async (tournamentId: string, matchId: string, r
     if (allMatchesCompleted) {
       await updateDoc(tournamentRef, {
         status: TournamentStatus.COMPLETED,
-        updatedAt: serverTimestamp()
-      });
-    } else if (allGroupMatchesCompleted && hasGroupMatches) {
-      // Only update to knockout stage if there were group matches
-      await updateDoc(tournamentRef, {
-        status: TournamentStatus.KNOCKOUT_STAGE,
         updatedAt: serverTimestamp()
       });
     }

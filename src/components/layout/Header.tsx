@@ -14,6 +14,7 @@ const Header: React.FC = () => {
     { name: 'תוצאות חיות', path: '/live' },
     { name: 'טורנירים', path: '/tournaments' },
     { name: 'שחקנים', path: '/players' },
+    { name: 'מציונים', path: '/standings' },
     ...(user ? [{ name: 'לוח בקרה', path: '/dashboard' }] : []),
     ...(user?.isAdmin ? [{ name: 'ניהול', path: '/admin' }] : []),
   ];

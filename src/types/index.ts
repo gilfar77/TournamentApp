@@ -151,6 +151,7 @@ export interface MatchResult {
   teamBScore: number;
   winner: string | null; // Team ID
   status?: MatchStatus;  // Add status field
+  actualStartTime?: Date | string; // Add actual start time
   details?: {
     periods?: number[];   // Basketball/Soccer period scores
     sets?: number[][];    // Volleyball set scores
