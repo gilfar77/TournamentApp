@@ -13,7 +13,7 @@ const platoonColors: Record<Platoon, string> = {
   [Platoon.PALSAR]: 'bg-sky-200',
   [Platoon.PALCHAN]: 'bg-orange-200',
   [Platoon.PALNAT]: 'bg-white',
-  [Platoon.PALSAM]: 'bg-gray-700',
+  [Platoon.MAFGAD]: 'bg-gray-700',
   [Platoon.PALTAZ]: 'bg-blue-800',
   [Platoon.MESAYAAT]: 'bg-black'
 };
@@ -22,7 +22,7 @@ const platoonTextColors: Record<Platoon, string> = {
   [Platoon.PALSAR]: 'text-sky-900',
   [Platoon.PALCHAN]: 'text-orange-900',
   [Platoon.PALNAT]: 'text-gray-900',
-  [Platoon.PALSAM]: 'text-white',
+  [Platoon.MAFGAD]: 'text-white',
   [Platoon.PALTAZ]: 'text-white',
   [Platoon.MESAYAAT]: 'text-white'
 };

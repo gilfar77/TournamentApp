@@ -20,7 +20,7 @@ const Footer: React.FC = () => {
           </div>
           
           <div className="text-sm text-primary-200">
-            <p>© {currentYear} כל הזכויות שמורות לסיירת כרמלי</p>
+            <p>© {currentYear} כל הזכויות שמורות לגיל פרטוק - סיירת כרמלי</p>
           </div>
         </div>
       </div>

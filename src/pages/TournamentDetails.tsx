@@ -1,46 +1,50 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Trophy, Users, Calendar, Clock, MapPin, Trash2 } from 'lucide-react';
+import { Trophy, Timer, Medal } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getTournamentById, deleteTournament, updateTournamentGroups } from '../services/tournamentService';
-import { Tournament, Match, MatchStage, SportNames, PlatoonNames, SportType, Platoon } from '../types';
+import { getTournamentById, deleteTournament, updateRunnerTime } from '../services/tournamentService';
+import { Tournament, SportType, PlatoonNames, Player } from '../types';
+import { getAllPlayers } from '../services/playerService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import MatchCard from '../components/match/MatchCard';
-import GroupStandings from '../components/tournament/GroupStandings';
-import GroupDrawAnimation from '../components/tournament/GroupDrawAnimation';
 
 const TournamentDetails: React.FC = () => {
   const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [tournament, setTournament] = useState<Tournament | null>(null);
+  const [runners, setRunners] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'standings'>('overview');
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showDrawAnimation, setShowDrawAnimation] = useState(true);
+  const [selectedRunner, setSelectedRunner] = useState<string>('');
+  const [runningTime, setRunningTime] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const fetchTournament = async () => {
+    const fetchData = async () => {
       if (!id) return;
       try {
-        const data = await getTournamentById(id);
-        setTournament(data);
-        setShowDrawAnimation(data?.groups?.every(group => group.teams.length === 0) ?? false);
+        const [tournamentData, playersData] = await Promise.all([
+          getTournamentById(id),
+          getAllPlayers()
+        ]);
+        setTournament(tournamentData);
+        // Only get runners who don't have other sports
+        setRunners(playersData.filter(p => p.isRunner && p.sportBranch.length === 1));
       } catch (err) {
-        console.error('Error fetching tournament:', err);
-        setError('אירעה שגיאה בטעינת הטורניר');
+        console.error('Error fetching data:', err);
+        setError('אירעה שגיאה בטעינת הנתונים');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTournament();
+    fetchData();
   }, [id]);
 
   const handleDelete = async () => {
-    if (!id || !window.confirm('האם אתה בטוח שברצונך למחוק את הטורניר? פעולה זו בלתי הפיכה.')) {
+    if (!id || !window.confirm('האם אתה בטוח שברצונך למחוק את התחרות? פעולה זו בלתי הפיכה.')) {
       return;
     }
 
@@ -50,42 +54,48 @@ const TournamentDetails: React.FC = () => {
       navigate('/tournaments');
     } catch (err) {
       console.error('Error deleting tournament:', err);
-      setError('אירעה שגיאה במחיקת הטורניר');
+      setError('אירעה שגיאה במחיקת התחרות');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const handleDrawComplete = async (groupA: string[], groupB: string[]) => {
-    if (!id || !tournament) return;
+  const handleSubmitTime = async () => {
+    if (!selectedRunner || !runningTime || !tournament) return;
 
+    setIsSubmitting(true);
     try {
-      const updatedGroups = [
-        {
-          id: 'group-a',
-          name: 'בית א׳',
-          teams: groupA
-        },
-        {
-          id: 'group-b',
-          name: 'בית ב׳',
-          teams: groupB
-        }
-      ];
+      // Convert time format from seconds.milliseconds to total seconds
+      const [seconds, milliseconds = '0'] = runningTime.split('.');
+      const totalSeconds = parseFloat(`${seconds}.${milliseconds}`);
 
-      await updateTournamentGroups(id, updatedGroups);
+      await updateRunnerTime(tournament.id, selectedRunner, totalSeconds);
       
       // Refresh tournament data
-      const updatedTournament = await getTournamentById(id);
+      const updatedTournament = await getTournamentById(tournament.id);
       if (updatedTournament) {
         setTournament(updatedTournament);
       }
-      
-      setShowDrawAnimation(false);
+
+      // Refresh runners list
+      const updatedRunners = await getAllPlayers();
+      setRunners(updatedRunners.filter(p => p.isRunner && p.sportBranch.length === 1));
+
+      // Reset form
+      setSelectedRunner('');
+      setRunningTime('');
     } catch (err) {
-      console.error('Error updating tournament groups:', err);
-      setError('אירעה שגיאה בעדכון הבתים');
+      console.error('Error updating runner time:', err);
+      setError('אירעה שגיאה בעדכון הזמן');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const formatTime = (seconds: number | undefined): string => {
+    if (!seconds) return '-';
+    // Convert to string with 2 decimal places and ensure we always show both digits
+    return seconds.toFixed(2);
   };
 
   if (loading) {
@@ -100,230 +110,146 @@ const TournamentDetails: React.FC = () => {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="bg-error-100 text-error-700 p-4 rounded-md">
-          {error || 'לא נמצא טורניר'}
+          {error || 'לא נמצאה תחרות'}
         </div>
       </div>
     );
   }
 
-  const renderGroups = () => (
-    <div className="grid md:grid-cols-2 gap-6 mb-6">
-      {tournament.groups?.map((group) => (
-        <Card key={group.id} className="p-6">
-          <h3 className="text-xl font-bold mb-4">{group.name}</h3>
-          <div className="space-y-3">
-            {group.teams.map((teamId) => (
-              <div key={teamId} className="p-3 bg-secondary-50 rounded-lg">
-                <span className="font-medium">{PlatoonNames[teamId as Platoon]}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-
-  const renderOverview = () => (
-    <div className="space-y-6">
-      <Card className="p-6">
-        <h3 className="text-xl font-bold mb-4">פרטי טורניר</h3>
-        <div className="space-y-4">
-          <div className="flex items-center">
-            <Trophy className="h-5 w-5 text-primary-500 mr-2" />
-            <span className="text-accent-700">סוג ספורט: {SportNames[tournament.sportType]}</span>
-          </div>
-          <div className="flex items-center">
-            <Calendar className="h-5 w-5 text-primary-500 mr-2" />
-            <span className="text-accent-700">
-              תאריכים: {new Date(tournament.startDate).toLocaleDateString('he-IL')} - {new Date(tournament.endDate).toLocaleDateString('he-IL')}
-            </span>
-          </div>
-          <div>
-            <p className="text-accent-700">{tournament.description}</p>
-          </div>
-        </div>
-      </Card>
-
-      <h3 className="text-xl font-bold mb-4">חלוקה לבתים</h3>
-      {renderGroups()}
-    </div>
-  );
-
-  const renderSchedule = () => (
-    <div className="space-y-6">
-      {tournament.matches.map((match) => (
-        <MatchCard
-          key={match.id}
-          match={match}
-          sportType={tournament.sportType}
-          tournamentId={tournament.id}
-          onUpdate={() => {
-            // Refresh tournament data when match is updated
-            if (id) {
-              getTournamentById(id).then(data => {
-                if (data) setTournament(data);
-              });
-            }
-          }}
-        />
-      ))}
-    </div>
-  );
-
-  const renderStandings = () => (
-    <div className="space-y-6">
-      {tournament.groups?.map(group => (
-        <GroupStandings
-          key={group.id}
-          groupName={group.name}
-          standings={calculateGroupStandings(group.id)}
-        />
-      ))}
-    </div>
-  );
-
-  const calculateGroupStandings = (groupId: string) => {
-    const standings: Record<string, TeamStanding> = {};
-
-    // Initialize standings for teams in this group
-    tournament.groups?.find(g => g.id === groupId)?.teams.forEach(teamId => {
-      standings[teamId] = {
-        platoon: teamId,
-        played: 0,
-        won: 0,
-        lost: 0,
-        drawn: 0,
-        points: 0,
-        goalsFor: 0,
-        goalsAgainst: 0
-      };
-    });
-
-    // Calculate standings from group matches
-    tournament.matches
-      .filter(match => match.groupId === groupId && match.result)
-      .forEach(match => {
-        const { teamA, teamB, result } = match;
-        
-        standings[teamA].played++;
-        standings[teamB].played++;
-        
-        standings[teamA].goalsFor += result!.teamAScore;
-        standings[teamA].goalsAgainst += result!.teamBScore;
-        standings[teamB].goalsFor += result!.teamBScore;
-        standings[teamB].goalsAgainst += result!.teamAScore;
-
-        if (result!.teamAScore > result!.teamBScore) {
-          standings[teamA].won++;
-          standings[teamB].lost++;
-          standings[teamA].points += 3;
-        } else if (result!.teamAScore < result!.teamBScore) {
-          standings[teamB].won++;
-          standings[teamA].lost++;
-          standings[teamB].points += 3;
-        } else {
-          standings[teamA].drawn++;
-          standings[teamB].drawn++;
-          standings[teamA].points += 1;
-          standings[teamB].points += 1;
-        }
-      });
-
-    return Object.values(standings);
-  };
-
-  return (
-    <>
-      {showDrawAnimation && tournament?.groups && user?.isAdmin && (
-        <GroupDrawAnimation
-          teams={Object.values(Platoon)}
-          onComplete={handleDrawComplete}
-        />
-      )}
-      
+  if (tournament.sportType !== SportType.RUNNING) {
+    return (
       <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center">
-            <Trophy className="h-8 w-8 text-primary-500 mr-3" />
-            <h1 className="text-3xl font-bold">{tournament.name}</h1>
-          </div>
-          {user?.isAdmin && (
-            <div className="flex items-center space-x-4">
-              <span className="px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-700">
-                {tournament.status === 'upcoming' && 'קרוב'}
-                {tournament.status === 'group_stage' && 'שלב הבתים'}
-                {tournament.status === 'knockout_stage' && 'שלב הנוק-אאוט'}
-                {tournament.status === 'completed' && 'הסתיים'}
-              </span>
-              <Button
-                variant="outline"
-                onClick={handleDelete}
-                isLoading={isDeleting}
-                className="text-error-500 border-error-500 hover:bg-error-50"
-                leftIcon={<Trash2 className="h-4 w-4" />}
-              >
-                מחק טורניר
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`py-4 px-6 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                  activeTab === 'overview'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                סקירה כללית
-              </button>
-              <button
-                onClick={() => setActiveTab('schedule')}
-                className={`py-4 px-6 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                  activeTab === 'schedule'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                לוח משחקים
-              </button>
-              <button
-                onClick={() => setActiveTab('standings')}
-                className={`py-4 px-6 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                  activeTab === 'standings'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                טבלת דירוג
-              </button>
-            </nav>
-          </div>
-        </div>
-
-        <div className="mt-8">
-          {activeTab === 'overview' && renderOverview()}
-          {activeTab === 'schedule' && renderSchedule()}
-          {activeTab === 'standings' && renderStandings()}
+        <div className="bg-warning-100 text-warning-700 p-4 rounded-md">
+          תחרות זו אינה תחרות ריצה
         </div>
       </div>
-    </>
+    );
+  }
+
+  const sortedRunners = [...runners].sort((a, b) => {
+    if (!a.stats.runningTime) return 1;
+    if (!b.stats.runningTime) return -1;
+    return a.stats.runningTime - b.stats.runningTime;
+  });
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center">
+          <Timer className="h-8 w-8 text-primary-500 mr-3" />
+          <h1 className="text-3xl font-bold">האיש המהיר בסיירת</h1>
+        </div>
+        {user?.isAdmin && (
+          <Button
+            variant="outline"
+            onClick={handleDelete}
+            isLoading={isDeleting}
+            className="text-error-500 border-error-500 hover:bg-error-50"
+          >
+            מחק תחרות
+          </Button>
+        )}
+      </div>
+
+      {user?.isAdmin && (
+        <Card className="mb-8">
+          <div className="p-6">
+            <h2 className="text-xl font-bold mb-4">הזנת זמן ריצה</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-accent-700 mb-1">
+                  בחר רץ
+                </label>
+                <select
+                  value={selectedRunner}
+                  onChange={(e) => setSelectedRunner(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">בחר רץ</option>
+                  {runners.map((runner) => (
+                    <option key={runner.id} value={runner.id}>
+                      {runner.firstName} {runner.lastName} ({PlatoonNames[runner.platoon]})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-accent-700 mb-1">
+                  זמן (שניות.אלפיות)
+                </label>
+                <input
+                  type="text"
+                  value={runningTime}
+                  onChange={(e) => setRunningTime(e.target.value)}
+                  placeholder="12.45"
+                  pattern="\d+\.\d{0,2}"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  onClick={handleSubmitTime}
+                  isLoading={isSubmitting}
+                  disabled={!selectedRunner || !runningTime}
+                  className="w-full"
+                >
+                  עדכן זמן
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="px-6 py-3 text-right">דירוג</th>
+                <th className="px-6 py-3 text-right">שם</th>
+                <th className="px-6 py-3 text-right">פלוגה</th>
+                <th className="px-6 py-3 text-center">זמן (שניות)</th>
+                <th className="px-6 py-3 text-center">מדליה</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRunners.map((runner, index) => (
+                <tr key={runner.id} className="border-b hover:bg-gray-50">
+                  <td className="px-6 py-4 font-medium">{index + 1}</td>
+                  <td className="px-6 py-4">
+                    {runner.firstName} {runner.lastName}
+                  </td>
+                  <td className="px-6 py-4">{PlatoonNames[runner.platoon]}</td>
+                  <td className="px-6 py-4 text-center">
+                    {runner.stats.runningTime ? (
+                      <div className="flex items-center justify-center">
+                        <Timer className="h-4 w-4 mr-1 text-primary-500" />
+                        {formatTime(runner.stats.runningTime)}
+                      </div>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    {runner.stats.runningTime && (
+                      <div className="flex justify-center">
+                        {index === 0 && <Medal className="h-5 w-5 text-yellow-500" />}
+                        {index === 1 && <Medal className="h-5 w-5 text-gray-400" />}
+                        {index === 2 && <Medal className="h-5 w-5 text-amber-700" />}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
   );
 };
 
-interface TeamStanding {
-  platoon: string;
-  played: number;
-  won: number;
-  lost: number;
-  drawn: number;
-  points: number;
-  goalsFor: number;
-  goalsAgainst: number;
-}
-
 export default TournamentDetails;
+
+export default TournamentDetails

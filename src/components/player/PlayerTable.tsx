@@ -13,7 +13,7 @@ const platoonColors: Record<Platoon | string, { bg: string; text: string }> = {
   [Platoon.PALSAR]: { bg: 'bg-sky-100', text: 'text-sky-900' },
   [Platoon.PALCHAN]: { bg: 'bg-orange-100', text: 'text-orange-900' },
   [Platoon.PALNAT]: { bg: 'bg-gray-100', text: 'text-gray-900' },
-  [Platoon.PALSAM]: { bg: 'bg-gray-700', text: 'text-white' },
+  [Platoon.MAFGAD]: { bg: 'bg-gray-700', text: 'text-white' },
   [Platoon.PALTAZ]: { bg: 'bg-blue-800', text: 'text-white' },
   [Platoon.MESAYAAT]: { bg: 'bg-black', text: 'text-white' },
   'default': { bg: 'bg-gray-500', text: 'text-white' } // Default case for invalid platoons

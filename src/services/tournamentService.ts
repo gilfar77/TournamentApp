@@ -558,3 +558,27 @@ export const updateMatchResult = async (tournamentId: string, matchId: string, r
     throw error;
   }
 };
+
+export const updateRunnerTime = async (tournamentId: string, runnerId: string, time: number): Promise<void> => {
+  try {
+    const batch = writeBatch(db);
+    
+    // Update player's running time
+    const playerRef = doc(db, 'players', runnerId);
+    batch.update(playerRef, {
+      'stats.runningTime': time,
+      updatedAt: serverTimestamp()
+    });
+
+    // Update tournament status if needed
+    const tournamentRef = doc(db, 'tournaments', tournamentId);
+    batch.update(tournamentRef, {
+      updatedAt: serverTimestamp()
+    });
+
+    await batch.commit();
+  } catch (error) {
+    console.error("Error updating runner time:", error);
+    throw error;
+  }
+};

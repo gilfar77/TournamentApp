@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Clock, Users, CheckCircle } from 'lucide-react';
-import { Tournament, Match, SportNames, PlatoonNames, MatchStatus, Platoon, Player } from '../types';
+import { Tournament, Match, SportNames, PlatoonNames, MatchStatus } from '../types';
 import { getAllTournaments } from '../services/tournamentService';
 import { getAllPlayers } from '../services/playerService';
 import Card from '../components/ui/Card';
@@ -11,12 +11,12 @@ type MatchFilter = 'live' | 'upcoming' | 'completed' | 'all';
 
 const LiveScores: React.FC = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [filter, setFilter] = useState<MatchFilter>('live');
-  const [showRoster, setShowRoster] = useState<Platoon | null>(null);
+  const [showRoster, setShowRoster] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -93,11 +93,10 @@ const LiveScores: React.FC = () => {
     }
   }).sort((a, b) => {
     // Sort by status priority and then by start time
-    const statusPriority: Record<MatchStatus, number> = {
+    const statusPriority = {
       [MatchStatus.IN_PROGRESS]: 0,
       [MatchStatus.SCHEDULED]: 1,
       [MatchStatus.COMPLETED]: 2,
-      [MatchStatus.CANCELLED]: 3
     };
     
     const statusDiff = statusPriority[a.match.status] - statusPriority[b.match.status];
@@ -198,10 +197,10 @@ const LiveScores: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
-                      onClick={() => setShowRoster(match.teamA as Platoon)}
+                      onClick={() => setShowRoster(match.teamA)}
                       className="font-medium hover:text-primary-600 transition-colors"
                     >
-                      {PlatoonNames[match.teamA as Platoon]}
+                      {PlatoonNames[match.teamA]}
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -215,10 +214,10 @@ const LiveScores: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
-                      onClick={() => setShowRoster(match.teamB as Platoon)}
+                      onClick={() => setShowRoster(match.teamB)}
                       className="font-medium hover:text-primary-600 transition-colors"
                     >
-                      {PlatoonNames[match.teamB as Platoon]}
+                      {PlatoonNames[match.teamB]}
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
