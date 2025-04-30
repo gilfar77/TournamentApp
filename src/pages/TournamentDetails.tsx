@@ -251,5 +251,3 @@ const TournamentDetails: React.FC = () => {
 };
 
 export default TournamentDetails;
-
-export default TournamentDetails
