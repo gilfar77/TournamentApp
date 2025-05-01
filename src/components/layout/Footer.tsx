@@ -13,7 +13,6 @@ const Footer: React.FC = () => {
                 src="/logo_sport.png" 
                 alt="סיירת כרמלי" 
                 className="w-full h-full object-contain"
-                style={{ objectFit: 'contain', objectPosition: 'center' }}
               />
             </div>
             <span className="font-bold text-lg mr-2">יום ספורט סיירת כרמלי</span>
@@ -28,4 +27,4 @@ const Footer: React.FC = () => {
   );
 };
 
-export default Footer;
+export default Footer

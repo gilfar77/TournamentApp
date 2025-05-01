@@ -37,7 +37,6 @@ const Header: React.FC = () => {
                   src="/logo_sport.png" 
                   alt="סיירת כרמלי" 
                   className="w-full h-full object-contain"
-                  style={{ objectFit: 'contain', objectPosition: 'center' }}
                 />
               </div>
               <span className="mr-2 font-bold text-xl">יום ספורט סיירת כרמלי</span>
