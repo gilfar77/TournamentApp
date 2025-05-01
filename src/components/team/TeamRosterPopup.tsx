@@ -146,7 +146,7 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
                       </div>
                     </td>
                     <td className="py-3 px-4 text-center">
-                      {player.stats.goalsScored !== undefined ? (
+                      {player.stats?.goalsScored !== undefined ? (
                         <div className="flex items-center justify-center">
                           <Trophy className="h-4 w-4 mr-1 text-yellow-500" />
                           {player.stats.goalsScored}
@@ -154,7 +154,7 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
                       ) : '-'}
                     </td>
                     <td className="py-3 px-4 text-center">
-                      {player.stats.basketsScored !== undefined ? (
+                      {player.stats?.basketsScored !== undefined ? (
                         <div className="flex items-center justify-center">
                           <Medal className="h-4 w-4 mr-1 text-orange-500" />
                           {player.stats.basketsScored}
@@ -165,23 +165,23 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
                       {player.isRunner ? (
                         <div className="flex items-center justify-center">
                           <Timer className="h-4 w-4 mr-1 text-green-500" />
-                          {formatTime(player.stats.runningTime)}
+                          {formatTime(player.stats?.runningTime)}
                         </div>
                       ) : '-'}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center space-x-2">
-                        {player.stats.goalsScored > 0 && (
+                        {player.stats?.goalsScored > 0 && (
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
                             מלך השערים
                           </span>
                         )}
-                        {player.stats.basketsScored > 0 && (
+                        {player.stats?.basketsScored > 0 && (
                           <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">
                             מלך הסלים
                           </span>
                         )}
-                        {player.isRunner && player.stats.runningTime && (
+                        {player.isRunner && player.stats?.runningTime && (
                           <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
                             רץ מצטיין
                           </span>

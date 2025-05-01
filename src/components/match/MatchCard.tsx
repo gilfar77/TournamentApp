@@ -37,7 +37,8 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
           setAvailablePlayers(players.map(p => ({
             id: p.id,
             name: `${p.firstName} ${p.lastName}`,
-            platoon: p.platoon
+            platoon: p.platoon,
+            ...p // Include all player data
           })));
         } catch (error) {
           console.error('Error fetching players:', error);
