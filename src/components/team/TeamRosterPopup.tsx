@@ -8,6 +8,7 @@ interface TeamRosterPopupProps {
   players: Player[];
   matches?: Match[];
   tournaments?: Tournament[];
+  currentTournamentId?: string;
 }
 
 interface TeamStats {
@@ -25,7 +26,8 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
   onClose,
   players,
   matches = [],
-  tournaments = []
+  tournaments = [],
+  currentTournamentId
 }) => {
   const formatTime = (seconds: number | undefined): string => {
     if (!seconds) return '-';
@@ -33,6 +35,36 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
+
+  const filteredPlayers = useMemo(() => {
+    console.log("TeamRosterPopup filtering:", { currentTournamentId, tournaments });
+    
+    if (!currentTournamentId) {
+      console.log("No tournament ID provided");
+      return players.filter(player => player.platoon === platoon);
+    }
+    
+    const currentTournament = tournaments.find(t => t.id === currentTournamentId);
+    if (!currentTournament) {
+      console.log("Tournament not found:", currentTournamentId);
+      return players.filter(player => player.platoon === platoon);
+    }
+
+    console.log("Current tournament:", currentTournament);
+    
+    // First filter by platoon
+    const platoonPlayers = players.filter(player => player.platoon === platoon);
+    console.log("Players after platoon filter:", platoonPlayers.length);
+    
+    // Then filter by sport type - show players whose sportBranch includes the tournament's sportType
+    const result = platoonPlayers.filter(player => 
+      Array.isArray(player.sportBranch) && 
+      player.sportBranch.includes(currentTournament.sportType)
+    );
+    
+    console.log("Final filtered players:", result.length, "sportType:", currentTournament.sportType);
+    return result;
+  }, [players, platoon, currentTournamentId, tournaments]);
 
   const teamStats = useMemo(() => {
     const stats: TeamStats = {
@@ -45,7 +77,11 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
       points: 0
     };
 
-    matches.forEach(match => {
+    const relevantMatches = currentTournamentId 
+      ? matches.filter(match => match.tournamentId === currentTournamentId)
+      : matches;
+
+    relevantMatches.forEach(match => {
       if (!match.result) return;
 
       const isTeamA = match.teamA === platoon;
@@ -71,7 +107,7 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
     });
 
     return stats;
-  }, [matches, platoon]);
+  }, [matches, platoon, currentTournamentId]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -124,7 +160,7 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
         
         {/* Player Roster Table */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-300px)]">
-          {players.length === 0 ? (
+          {filteredPlayers.length === 0 ? (
             <p className="text-center text-gray-500">לא נמצאו שחקנים</p>
           ) : (
             <table className="w-full">
@@ -138,7 +174,7 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {players.map((player) => (
+                {filteredPlayers.map((player) => (
                   <tr key={player.id} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-4">
                       <div className="font-medium">

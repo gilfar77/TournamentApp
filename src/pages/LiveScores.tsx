@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Clock, Users, CheckCircle } from 'lucide-react';
-import { Tournament, Match, SportNames, PlatoonNames, MatchStatus } from '../types';
+import { Tournament, Match, SportNames, PlatoonNames, MatchStatus, Platoon, Player } from '../types';
 import { getAllTournaments } from '../services/tournamentService';
 import { getAllPlayers } from '../services/playerService';
 import Card from '../components/ui/Card';
@@ -11,12 +11,12 @@ type MatchFilter = 'live' | 'upcoming' | 'completed' | 'all';
 
 const LiveScores: React.FC = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [players, setPlayers] = useState([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [filter, setFilter] = useState<MatchFilter>('live');
-  const [showRoster, setShowRoster] = useState(null);
+  const [showRoster, setShowRoster] = useState<{platoon: Platoon, tournamentId: string} | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -97,6 +97,7 @@ const LiveScores: React.FC = () => {
       [MatchStatus.IN_PROGRESS]: 0,
       [MatchStatus.SCHEDULED]: 1,
       [MatchStatus.COMPLETED]: 2,
+      [MatchStatus.CANCELLED]: 3 // Add this to handle cancelled matches
     };
     
     const statusDiff = statusPriority[a.match.status] - statusPriority[b.match.status];
@@ -197,10 +198,10 @@ const LiveScores: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
-                      onClick={() => setShowRoster(match.teamA)}
+                      onClick={() => setShowRoster({platoon: match.teamA as Platoon, tournamentId: tournament.id})}
                       className="font-medium hover:text-primary-600 transition-colors"
                     >
-                      {PlatoonNames[match.teamA]}
+                      {PlatoonNames[match.teamA as Platoon]}
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -214,10 +215,10 @@ const LiveScores: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
-                      onClick={() => setShowRoster(match.teamB)}
+                      onClick={() => setShowRoster({platoon: match.teamB as Platoon, tournamentId: tournament.id})}
                       className="font-medium hover:text-primary-600 transition-colors"
                     >
-                      {PlatoonNames[match.teamB]}
+                      {PlatoonNames[match.teamB as Platoon]}
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -247,11 +248,12 @@ const LiveScores: React.FC = () => {
 
       {showRoster && (
         <TeamRosterPopup
-          platoon={showRoster}
+          platoon={showRoster.platoon}
           onClose={() => setShowRoster(null)}
-          players={players.filter(p => p.platoon === showRoster)}
+          players={players}
           matches={tournaments.flatMap(t => t.matches)}
           tournaments={tournaments}
+          currentTournamentId={showRoster.tournamentId}
         />
       )}
     </div>

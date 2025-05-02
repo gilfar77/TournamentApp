@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Plus, X } from 'lucide-react';
-import { Match, MatchStage, MatchStatus, SportType, PlatoonNames, PlayerScore } from '../../types';
+import { Match, MatchStage, MatchStatus, SportType, PlatoonNames, PlayerScore, Platoon, Player, TournamentFormat, TournamentStatus } from '../../types';
 import { updateMatchResult } from '../../services/tournamentService';
 import { getAllPlayers, incrementPlayerGoals } from '../../services/playerService';
 import { useAuth } from '../../context/AuthContext';
@@ -22,7 +22,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
   const [teamBScore, setTeamBScore] = useState(match.result?.teamBScore || 0);
   const [loading, setLoading] = useState(false);
   const [scorers, setScorers] = useState<PlayerScore[]>(match.result?.scorers || []);
-  const [availablePlayers, setAvailablePlayers] = useState<Array<{ id: string; name: string; platoon: string }>>([]);
+  const [availablePlayers, setAvailablePlayers] = useState<Player[]>([]);
   const [showScorerForm, setShowScorerForm] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [isOwnGoal, setIsOwnGoal] = useState(false);
@@ -30,22 +30,15 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
   const [showRoster, setShowRoster] = useState<string | null>(null);
 
   useEffect(() => {
-    if (sportType === SportType.SOCCER) {
-      const fetchPlayers = async () => {
-        try {
-          const players = await getAllPlayers();
-          setAvailablePlayers(players.map(p => ({
-            id: p.id,
-            name: `${p.firstName} ${p.lastName}`,
-            platoon: p.platoon,
-            ...p // Include all player data
-          })));
-        } catch (error) {
-          console.error('Error fetching players:', error);
-        }
-      };
-      fetchPlayers();
-    }
+    const fetchPlayers = async () => {
+      try {
+        const players = await getAllPlayers();
+        setAvailablePlayers(players);
+      } catch (error) {
+        console.error('Error fetching players:', error);
+      }
+    };
+    fetchPlayers();
   }, [sportType]);
 
   const handleStartMatch = async () => {
@@ -121,7 +114,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
 
       const newScorer: PlayerScore = {
         playerId: player.id,
-        playerName: player.name,
+        playerName: `${player.firstName} ${player.lastName}`,
         team: isOwnGoal ? (selectedTeam === match.teamA ? match.teamB : match.teamA) : selectedTeam,
         count: 1,
         isOwnGoal
@@ -370,7 +363,7 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
                                     .filter(p => !isOwnGoal ? p.platoon === selectedTeam : p.platoon !== selectedTeam)
                                     .map(player => (
                                       <option key={player.id} value={player.id}>
-                                        {player.name}
+                                        {player.firstName} {player.lastName}
                                       </option>
                                     ))
                                   }
@@ -460,10 +453,26 @@ const MatchCard: React.FC<MatchCardProps> = ({ match, sportType, tournamentId, o
 
       {showRoster && (
         <TeamRosterPopup
-          platoon={showRoster}
+          platoon={showRoster as Platoon}
           onClose={() => setShowRoster(null)}
-          players={availablePlayers.filter(p => p.platoon === showRoster)}
+          players={availablePlayers}
           matches={[match]}
+          tournaments={[{ 
+            id: `${tournamentId}-${match.id}`,
+            sportType,
+            matches: [match],
+            teams: [],
+            name: '',
+            description: '',
+            format: TournamentFormat.LEAGUE_KNOCKOUT,
+            startDate: new Date(),
+            endDate: new Date(),
+            status: TournamentStatus.GROUP_STAGE,
+            createdBy: '',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }]}
+          currentTournamentId={`${tournamentId}-${match.id}`}
         />
       )}
     </Card>

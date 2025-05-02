@@ -76,6 +76,27 @@ const Players: React.FC = () => {
       filtered = filtered.filter(player => player.isRunner === showRunners);
     }
 
+    // Sort players by platoon, sport, and alphabetically
+    filtered.sort((a, b) => {
+      // First sort by platoon
+      if (a.platoon !== b.platoon) {
+        return a.platoon.localeCompare(b.platoon);
+      }
+      
+      // Then sort by first sport in sportBranch array
+      const aSport = a.sportBranch[0] || '';
+      const bSport = b.sportBranch[0] || '';
+      if (aSport !== bSport) {
+        return aSport.localeCompare(bSport);
+      }
+      
+      // Finally sort by last name, then first name
+      if (a.lastName !== b.lastName) {
+        return a.lastName.localeCompare(b.lastName);
+      }
+      return a.firstName.localeCompare(b.firstName);
+    });
+
     setFilteredPlayers(filtered);
   };
 
