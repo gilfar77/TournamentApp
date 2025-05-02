@@ -242,6 +242,16 @@ const TournamentDetails: React.FC = () => {
       )}
       
       <div className="container mx-auto px-4 py-8">
+        <div className="mb-4">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/tournaments')}
+            className="text-accent-600"
+          >
+            חזרה
+          </Button>
+        </div>
+      
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center">
             <Trophy className="h-8 w-8 text-primary-500 mr-3" />
