@@ -1,4 +1,5 @@
 import React from 'react';
+import { APP_VERSION_WITH_DATE } from '../../utils/version';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -19,7 +20,13 @@ const Footer: React.FC = () => {
           </div>
           
           <div className="text-sm text-primary-200">
-            <p>© {currentYear} כל הזכויות שמורות לגיל פרטוק - סיירת כרמלי</p>
+            <p className="relative group">
+              © {currentYear} כל הזכויות שמורות לגיל פרטוק - סיירת כרמלי
+              <span className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-300 
+                bg-primary-900 text-white text-xs rounded py-1 px-2 -mt-16 md:mt-0 md:-mr-24 right-0 bottom-full mb-2">
+                {APP_VERSION_WITH_DATE}
+              </span>
+            </p>
           </div>
         </div>
       </div>
