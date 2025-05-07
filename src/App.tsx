@@ -12,6 +12,7 @@ import TournamentDetails from './pages/TournamentDetails';
 import Players from './pages/Players';
 import LiveScores from './pages/LiveScores';
 import Standings from './pages/Standings';
+import Gallery from './pages/Gallery';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
               <Route path="/tournaments/:id" element={<TournamentDetails />} />
               <Route path="/standings" element={<Standings />} />
               <Route path="/players" element={<Players />} />
+              <Route path="/gallery" element={<Gallery />} />
               
               {/* Admin Routes */}
               <Route path="/admin" element={

@@ -10,6 +10,7 @@ A tournament management system for Sayeret Carmeli, enabling the creation and ma
 - Match scheduling and result tracking
 - Admin dashboard
 - Player roster management
+- Image Gallery connected to Google Drive
 
 ## Firebase Setup Instructions
 
@@ -138,14 +139,56 @@ To import players in bulk, prepare a CSV file with the following columns:
 
 Example template is provided in \`public/player_import_template.csv\`
 
+## Google Drive Gallery Setup
+
+The application includes a gallery feature that displays images from a shared Google Drive folder.
+
+### 1. Create a Google Cloud Project
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project
+3. Enable the Google Drive API for your project
+
+### 2. Create API Credentials
+
+1. In the Google Cloud Console, go to "APIs & Services" > "Credentials"
+2. Click "Create Credentials" > "API Key"
+3. Copy your API key
+4. (Optional but recommended) Restrict the API key to only the Google Drive API
+
+### 3. Create a Shared Google Drive Folder
+
+1. Create a folder in Google Drive
+2. Upload your tournament images to this folder
+3. Make sure the folder is shared with appropriate permissions (typically "Anyone with the link can view")
+4. Copy the folder ID from the URL (the long alphanumeric string)
+
+### 4. Set Environment Variables
+
+Add these variables to your `.env` file:
+
+```
+VITE_GOOGLE_API_KEY=your_google_api_key
+VITE_GOOGLE_DRIVE_FOLDER_ID=your_folder_id
+```
+
+### 5. CORS and Proxy Configuration
+
+The application uses a proxy server to bypass CORS restrictions on Google Drive images. This is configured in:
+
+- `vite.config.ts` for local development
+- `vercel.json` for production deployment on Vercel
+
 ## Technologies Used
 
 - React + TypeScript
 - Firebase Authentication
 - Firebase Firestore
+- Google Drive API
 - TailwindCSS
 - React Router
 - React Hook Form
+- React Image Gallery
 - Zustand (state management)
 
 ## Project Structure

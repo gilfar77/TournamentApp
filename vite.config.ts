@@ -8,10 +8,22 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
-    historyApiFallback: true,
+    proxy: {
+      // Proxy for Google Drive images to bypass CORS
+      '/api/image-proxy': {
+        target: 'https://lh3.googleusercontent.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/image-proxy/, ''),
+      },
+      // Proxy for direct Google Drive API requests
+      '/api/drive-proxy': {
+        target: 'https://www.googleapis.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/drive-proxy/, ''),
+      }
+    }
   },
   preview: {
-    historyApiFallback: true,
   },
   build: {
     rollupOptions: {
