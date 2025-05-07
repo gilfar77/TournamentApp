@@ -16,7 +16,6 @@ const Header: React.FC = () => {
     { name: 'טבלת דירוג', path: '/standings' },
     { name: 'שחקנים', path: '/players' },
     { name: 'גלריה', path: '/gallery' },
-    { name: 'בדיקת גלריה', path: '/gallery-test' },
     { name: 'ניהול', path: '/admin', requireAdmin: true },
   ];
 
