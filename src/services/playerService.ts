@@ -22,6 +22,8 @@ export const createPlayer = async (player: Omit<Player, 'id' | 'stats' | 'create
   try {
     const playerData = {
       ...player,
+      isCaptain: player.isCaptain || false,
+      isManager: player.isManager || false,
       stats: {
         basketsScored: 0,
         goalsScored: 0,

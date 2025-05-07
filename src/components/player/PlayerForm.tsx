@@ -103,6 +103,29 @@ const PlayerForm: React.FC<PlayerFormProps> = ({
         </label>
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              {...register('isCaptain')}
+              className="mr-2"
+            />
+            קפטן
+          </label>
+        </div>
+        <div>
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              {...register('isManager')}
+              className="mr-2"
+            />
+            מנהל
+          </label>
+        </div>
+      </div>
+
       <Button
         type="submit"
         isLoading={isLoading}

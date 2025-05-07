@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, Trash2, Timer, Trophy, Medal } from 'lucide-react';
+import { Edit2, Trash2, Timer, Trophy, Medal, Flag, Briefcase } from 'lucide-react';
 import { Player, PlatoonNames, SportNames, Platoon } from '../../types';
 
 interface PlayerTableProps {
@@ -76,6 +76,22 @@ const PlayerTable: React.FC<PlayerTableProps> = ({
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
                     {player.firstName} {player.lastName}
+                    {(player.isCaptain || player.isManager) && (
+                      <span className="inline-flex gap-1 ml-2">
+                        {player.isCaptain && (
+                          <span className="relative group">
+                            <Flag className="h-4 w-4 text-blue-500" />
+                            <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 -mt-12 ml-2 z-10">קפטן</span>
+                          </span>
+                        )}
+                        {player.isManager && (
+                          <span className="relative group">
+                            <Briefcase className="h-4 w-4 text-purple-500" />
+                            <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 -mt-12 ml-2 z-10">מנהל</span>
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -92,6 +108,18 @@ const PlayerTable: React.FC<PlayerTableProps> = ({
                 </td>
                 <td className="px-6 py-4">
                   <div className="space-y-1">
+                    {player.isCaptain && (
+                      <div className="flex items-center text-sm">
+                        <Flag className="h-4 w-4 mr-1 text-blue-500" />
+                        <span>קפטן</span>
+                      </div>
+                    )}
+                    {player.isManager && (
+                      <div className="flex items-center text-sm">
+                        <Briefcase className="h-4 w-4 mr-1 text-purple-500" />
+                        <span>מנהל</span>
+                      </div>
+                    )}
                     {player.stats.basketsScored !== undefined && (
                       <div className="flex items-center text-sm">
                         <Trophy className="h-4 w-4 mr-1 text-orange-500" />

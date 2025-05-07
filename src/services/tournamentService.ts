@@ -114,6 +114,59 @@ const updateSemiFinalTeams = async (
   await batch.commit();
 };
 
+const updateFinalTeams = async (
+  tournamentId: string,
+  matches: Match[],
+) => {
+  const batch = writeBatch(db);
+  const tournamentRef = doc(db, 'tournaments', tournamentId);
+  
+  // Find the semi-final matches
+  const semiFinals = matches.filter(m => m.stage === MatchStage.SEMI_FINAL && m.status === MatchStatus.COMPLETED);
+  if (semiFinals.length !== 2) return; // Both semi-finals must be completed
+  
+  const sf1 = semiFinals.find(m => m.id === 'sf1');
+  const sf2 = semiFinals.find(m => m.id === 'sf2');
+  
+  if (!sf1 || !sf2 || !sf1.result || !sf2.result) return;
+  
+  // Determine winners and losers
+  const sf1Winner = sf1.result.winner;
+  const sf2Winner = sf2.result.winner;
+  const sf1Loser = sf1.result.winner === sf1.teamA ? sf1.teamB : sf1.teamA;
+  const sf2Loser = sf2.result.winner === sf2.teamA ? sf2.teamB : sf2.teamA;
+  
+  if (!sf1Winner || !sf2Winner) return; // Both matches must have winners
+  
+  console.log("Updating final teams:", {
+    sf1Winner, sf2Winner, sf1Loser, sf2Loser
+  });
+  
+  // Update final match
+  const finalMatch = matches.find(m => m.stage === MatchStage.FINAL);
+  if (finalMatch) {
+    const matchRef = doc(collection(tournamentRef, 'matches'), finalMatch.id);
+    batch.update(matchRef, {
+      teamA: sf1Winner,
+      teamB: sf2Winner,
+      updatedAt: serverTimestamp()
+    });
+  }
+  
+  // Update 3rd place match
+  const thirdPlaceMatch = matches.find(m => m.stage === MatchStage.THIRD_PLACE);
+  if (thirdPlaceMatch) {
+    const matchRef = doc(collection(tournamentRef, 'matches'), thirdPlaceMatch.id);
+    batch.update(matchRef, {
+      teamA: sf1Loser,
+      teamB: sf2Loser,
+      updatedAt: serverTimestamp()
+    });
+  }
+  
+  await batch.commit();
+};
+
 const generateKnockoutMatches = (
   tournamentId: string,
   startDate: Date,
@@ -371,12 +424,40 @@ export const updateTournamentGroups = async (
 export const updateTournament = async (id: string, data: Partial<Tournament>): Promise<void> => {
   try {
     const tournamentRef = doc(db, 'tournaments', id);
+    
+    // If we're changing status to KNOCKOUT_STAGE, make sure semi-final teams are updated
+    if (data.status === TournamentStatus.KNOCKOUT_STAGE) {
+      // Get tournament data
+      const tournamentDoc = await getDoc(tournamentRef);
+      if (!tournamentDoc.exists()) {
+        throw new Error('Tournament not found');
+      }
+      const tournamentData = tournamentDoc.data() as Tournament;
+      
+      // Get all matches
+      const matchesRef = collection(tournamentRef, 'matches');
+      const matchesQuery = query(matchesRef, orderBy('startTime'));
+      const matchesSnapshot = await getDocs(matchesQuery);
+      const matches = matchesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        startTime: doc.data().startTime.toDate(),
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate()
+      } as Match));
+      
+      // Update semi-final teams
+      if (tournamentData.groups) {
+        await updateSemiFinalTeams(id, matches, tournamentData.groups);
+      }
+    }
+    
     await updateDoc(tournamentRef, {
       ...data,
       updatedAt: serverTimestamp()
     });
   } catch (error) {
-    console.error("Error updating tournament:", error);
+    console.error('Error updating tournament:', error);
     throw error;
   }
 };
@@ -422,16 +503,17 @@ export const getAllTournaments = async (): Promise<Tournament[]> => {
       updatedAt: matchDoc.data().updatedAt.toDate()
     } as Match));
 
+    const data = doc.data();
     return {
       id: doc.id,
-      ...doc.data(),
-      startDate: doc.data().startDate.toDate(),
-      endDate: doc.data().endDate.toDate(),
-      createdAt: doc.data().createdAt.toDate(),
-      updatedAt: doc.data().updatedAt.toDate(),
+      ...data,
+      startDate: data.startDate.toDate(),
+      endDate: data.endDate.toDate(),
+      createdAt: data.createdAt.toDate(),
+      updatedAt: data.updatedAt.toDate(),
       teams: [], // These will be fetched separately when needed
       matches
-    } as Tournament;
+    } as unknown as Tournament;
   }));
 
   return tournaments;
@@ -478,8 +560,8 @@ export const getTournamentById = async (id: string): Promise<Tournament | null> 
 // Match Management
 export const updateMatchResult = async (tournamentId: string, matchId: string, result: Match['result']): Promise<void> => {
   try {
-    if (!tournamentId || !matchId) {
-      throw new Error('Tournament ID and Match ID are required');
+    if (!tournamentId || !matchId || !result) {
+      throw new Error('Tournament ID, Match ID, and Result are required');
     }
 
     const tournamentRef = doc(db, 'tournaments', tournamentId);
@@ -495,7 +577,7 @@ export const updateMatchResult = async (tournamentId: string, matchId: string, r
     // Update match result and status
     await updateDoc(matchRef, {
       result,
-      status: result.status || MatchStatus.COMPLETED,
+      status: result?.status || MatchStatus.COMPLETED,
       updatedAt: serverTimestamp()
     });
 
@@ -519,7 +601,7 @@ export const updateMatchResult = async (tournamentId: string, matchId: string, r
     const tournamentData = tournamentDoc.data() as Tournament;
 
     // Check if this is the first match being started
-    if (matchData.status === MatchStatus.SCHEDULED && result.status === MatchStatus.IN_PROGRESS) {
+    if (matchData.status === MatchStatus.SCHEDULED && result?.status === MatchStatus.IN_PROGRESS) {
       if (tournamentData.status === TournamentStatus.UPCOMING) {
         await updateDoc(tournamentRef, {
           status: TournamentStatus.GROUP_STAGE,
@@ -536,6 +618,17 @@ export const updateMatchResult = async (tournamentId: string, matchId: string, r
     // If all group matches are completed, update semi-final teams
     if (allGroupMatchesCompleted && hasGroupMatches && tournamentData.groups) {
       await updateSemiFinalTeams(tournamentId, matches, tournamentData.groups);
+    }
+
+    // Check if the completed match is a semi-final
+    const isSemiFinal = matchData.stage === MatchStage.SEMI_FINAL;
+    const semiFinalMatches = matches.filter(m => m.stage === MatchStage.SEMI_FINAL);
+    const allSemiFinalsCompleted = semiFinalMatches.every(m => m.status === MatchStatus.COMPLETED);
+    
+    // If all semi-finals are completed, update final and 3rd place match teams
+    if (isSemiFinal && result?.status === MatchStatus.COMPLETED && 
+        allSemiFinalsCompleted && semiFinalMatches.length === 2) {
+      await updateFinalTeams(tournamentId, matches);
     }
 
     // Check if all matches are completed

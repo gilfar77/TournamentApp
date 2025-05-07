@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Shield, Timer, Trophy } from 'lucide-react';
+import { User, Shield, Timer, Trophy, Flag, Briefcase } from 'lucide-react';
 import { Player, PlatoonNames, SportNames } from '../../types';
 import Card from '../ui/Card';
 
@@ -33,6 +33,20 @@ const PlayerList: React.FC<PlayerListProps> = ({
               <div>
                 <h3 className="text-lg font-semibold">
                   {player.firstName} {player.lastName}
+                  <span className="inline-flex gap-1 ml-2">
+                    {player.isCaptain && (
+                      <span className="relative group">
+                        <Flag className="h-4 w-4 text-blue-500" />
+                        <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 -mt-12 ml-2 z-10">קפטן</span>
+                      </span>
+                    )}
+                    {player.isManager && (
+                      <span className="relative group">
+                        <Briefcase className="h-4 w-4 text-purple-500" />
+                        <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 -mt-12 ml-2 z-10">מנהל</span>
+                      </span>
+                    )}
+                  </span>
                 </h3>
                 <p className="text-accent-600">{PlatoonNames[player.platoon]}</p>
               </div>
@@ -60,6 +74,24 @@ const PlayerList: React.FC<PlayerListProps> = ({
               <span className="font-medium">ענפי ספורט: </span>
               {player.sportBranch.map(sport => SportNames[sport]).join(', ')}
             </div>
+            
+            {player.isCaptain && (
+              <div className="text-sm text-blue-700 font-medium">
+                <span className="flex items-center">
+                  <Flag className="h-4 w-4 mr-1" />
+                  קפטן
+                </span>
+              </div>
+            )}
+            
+            {player.isManager && (
+              <div className="text-sm text-purple-700 font-medium">
+                <span className="flex items-center">
+                  <Briefcase className="h-4 w-4 mr-1" />
+                  מנהל
+                </span>
+              </div>
+            )}
             
             {player.stats.basketsScored !== undefined && (
               <div className="text-sm">

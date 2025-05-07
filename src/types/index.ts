@@ -51,6 +51,8 @@ export interface Player {
   platoon: Platoon;
   sportBranch: SportType[];
   isRunner: boolean;
+  isCaptain: boolean;
+  isManager: boolean;
   stats: PlayerStats;
   createdAt: Date;
   updatedAt: Date;

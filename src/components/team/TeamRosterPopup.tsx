@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { X, Trophy, Timer, Medal } from 'lucide-react';
+import { X, Trophy, Timer, Medal, Flag, Briefcase } from 'lucide-react';
 import { Player, Platoon, PlatoonNames, Match, Tournament } from '../../types';
 
 interface TeamRosterPopupProps {
@@ -179,6 +179,20 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
                     <td className="py-3 px-4">
                       <div className="font-medium">
                         {player.firstName} {player.lastName}
+                        <span className="inline-flex gap-1 ml-2">
+                          {player.isCaptain && (
+                            <span className="relative group">
+                              <Flag className="h-4 w-4 text-blue-500" />
+                              <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 -mt-12 ml-2 z-10">קפטן</span>
+                            </span>
+                          )}
+                          {player.isManager && (
+                            <span className="relative group">
+                              <Briefcase className="h-4 w-4 text-purple-500" />
+                              <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 -mt-12 ml-2 z-10">מנהל</span>
+                            </span>
+                          )}
+                        </span>
                       </div>
                     </td>
                     <td className="py-3 px-4 text-center">
@@ -207,12 +221,22 @@ const TeamRosterPopup: React.FC<TeamRosterPopupProps> = ({
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center space-x-2">
-                        {player.stats?.goalsScored > 0 && (
+                        {player.isCaptain && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                            קפטן
+                          </span>
+                        )}
+                        {player.isManager && (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
+                            מנהל
+                          </span>
+                        )}
+                        {player.stats?.goalsScored !== undefined && player.stats.goalsScored > 0 && (
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
                             מלך השערים
                           </span>
                         )}
-                        {player.stats?.basketsScored > 0 && (
+                        {player.stats?.basketsScored !== undefined && player.stats.basketsScored > 0 && (
                           <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">
                             מלך הסלים
                           </span>
