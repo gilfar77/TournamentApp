@@ -35,7 +35,7 @@ const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
 };
 
 // Available page size options
-const PAGE_SIZE_OPTIONS = [20, 50, 100, 200, 500];
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
 
 // Interface for storing folder navigation history with complete context
 interface FolderHistoryItem {
@@ -51,6 +51,10 @@ const Gallery: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<GalleryImage | null>(null);
   const [configValid, setConfigValid] = useState(true);
   
+  // Lazy loading state
+  const [isLazyLoading, setIsLazyLoading] = useState(false);
+  const [allImagesLoaded, setAllImagesLoaded] = useState(false);
+  
   // Folder navigation state
   const [currentFolderId, setCurrentFolderId] = useState<string>(GOOGLE_DRIVE_FOLDER_ID);
   const [currentFolder, setCurrentFolder] = useState<DriveFolder | undefined>(undefined);
@@ -62,7 +66,11 @@ const Gallery: React.FC = () => {
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
   const [pageTokenHistory, setPageTokenHistory] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(100); // Default page size of 100 items
+  const [pageSize, setPageSize] = useState(20); // Default smaller batch size of 20
+  
+  // Initial load size is smaller for faster initial render
+  const INITIAL_LOAD_SIZE = 10;
+  const LAZY_LOAD_SIZE = 20;
 
   // Handle page size change
   const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -74,16 +82,22 @@ const Gallery: React.FC = () => {
       setNextPageToken(undefined);
       setPageTokenHistory([]);
       setCurrentPage(1);
-      fetchContent({ pageSize: newSize });
+      setImages([]);
+      fetchContent({ pageSize: newSize, isInitialLoad: true });
     }
   };
 
-  const fetchContent = async (options: PaginationOptions = {}) => {
+  const fetchContent = async (options: PaginationOptions & { isInitialLoad?: boolean } = {}) => {
     try {
-      setLoading(true);
+      // Set appropriate loading state
+      if (options.isInitialLoad || images.length === 0) {
+        setLoading(true);
+      } else if (!options.isBack) {
+        setIsLazyLoading(true);
+      }
       
       // Use provided page size or default to state value
-      const size = options.pageSize || pageSize;
+      const size = options.pageSize || (options.isInitialLoad ? INITIAL_LOAD_SIZE : pageSize);
       
       // Fetch images with pagination
       const response = await fetchImagesFromDrive(currentFolderId, undefined, {
@@ -91,8 +105,17 @@ const Gallery: React.FC = () => {
         pageToken: options.pageToken
       });
       
-      setImages(response.images);
-      setFolders(response.folders);
+      // For initial load or when going back, replace images
+      // For lazy loading (when adding more), append images
+      if (options.isInitialLoad || options.isBack) {
+        setImages(response.images);
+        setFolders(response.folders);
+      } else {
+        setImages(prev => [...prev, ...response.images]);
+      }
+      
+      // Track if we've reached the end of available images
+      setAllImagesLoaded(!response.nextPageToken);
       setNextPageToken(response.nextPageToken);
       
       // Update current folder information
@@ -108,11 +131,8 @@ const Gallery: React.FC = () => {
       }
       
       // If we're not going back, add the current token to history
-      if (!options.isBack) {
-        // If we're moving to a new page (not initial load with no token)
-        if (pageToken) {
-          setPageTokenHistory(prev => [...prev, pageToken]);
-        }
+      if (!options.isBack && pageToken) {
+        setPageTokenHistory(prev => [...prev, pageToken]);
       }
       
       console.log(`Fetched ${response.images.length} images and ${response.folders.length} folders. Next page token: ${response.nextPageToken || 'none'}`);
@@ -122,13 +142,37 @@ const Gallery: React.FC = () => {
       setError('אירעה שגיאה בטעינת התמונות');
     } finally {
       setLoading(false);
+      setIsLazyLoading(false);
     }
   };
+
+  // Automatically load more images when scrolling to bottom
+  const handleScroll = () => {
+    if (loading || isLazyLoading || allImagesLoaded || !nextPageToken) return;
+    
+    const scrollPosition = window.innerHeight + window.pageYOffset;
+    const pageHeight = document.documentElement.scrollHeight;
+    const scrollThreshold = 0.8; // When user has scrolled 80% of the page
+    
+    if (scrollPosition >= pageHeight * scrollThreshold) {
+      console.log('Lazy loading more images...');
+      setPageToken(nextPageToken);
+      fetchContent({ pageToken: nextPageToken, pageSize: LAZY_LOAD_SIZE });
+    }
+  };
+
+  // Add scroll event listener for lazy loading
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [loading, isLazyLoading, nextPageToken, allImagesLoaded]);
 
   useEffect(() => {
     const validateAndFetchContent = async () => {
       try {
         setLoading(true);
+        setImages([]);
+        setAllImagesLoaded(false);
 
         // Log environment variables (redacted for security)
         console.log('API Key configured:', GOOGLE_API_KEY ? 'Yes (length: ' + GOOGLE_API_KEY.length + ')' : 'No');
@@ -157,8 +201,8 @@ const Gallery: React.FC = () => {
           return;
         }
 
-        // Folder access is valid, now fetch content
-        await fetchContent({ pageSize: pageSize });
+        // Folder access is valid, now fetch content with initial small batch
+        await fetchContent({ isInitialLoad: true, pageSize: INITIAL_LOAD_SIZE });
       } catch (err) {
         console.error('Error in validateAndFetchContent:', err);
         setError('אירעה שגיאה בטעינת התמונות');
@@ -450,7 +494,7 @@ const Gallery: React.FC = () => {
         </button>
       </div>
       
-      {loading && (
+      {(loading || isLazyLoading) && (
         <div className="ml-4">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500"></div>
         </div>
@@ -474,10 +518,31 @@ const Gallery: React.FC = () => {
 
   // Render folder grid
   const FolderGrid = () => {
-    if (folders.length === 0) return null;
+    if (folders.length === 0 && folderHistory.length === 0) return null;
     
     return (
       <div className="mb-8">
+        {/* Upper folder navigation controls */}
+        {folderHistory.length > 0 && (
+          <div className="mb-4 flex items-center">
+            <button
+              onClick={navigateBack}
+              className="flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md mr-3"
+            >
+              <ChevronUp className="h-5 w-5 mr-2" />
+              <span>חזור לתיקייה הקודמת</span>
+            </button>
+            
+            <button
+              onClick={navigateToRoot}
+              className="flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md"
+            >
+              <FolderOpen className="h-5 w-5 mr-2" />
+              <span>חזור לתיקייה הראשית</span>
+            </button>
+          </div>
+        )}
+        
         <h2 className="text-xl font-semibold mb-4">תיקיות ({folders.length})</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {folderHistory.length > 0 && (
@@ -515,7 +580,7 @@ const Gallery: React.FC = () => {
         
         <div className="text-sm text-gray-600">
           {images.length > 0 ? (
-            <span>מציג {images.length} תמונות מתוך {currentPage > 1 || nextPageToken ? 'יותר מ-' : ''}{(currentPage - 1) * pageSize + images.length}</span>
+            <span>מציג {images.length} תמונות {!allImagesLoaded ? '(טוען עוד...)' : ''}</span>
           ) : null}
         </div>
       </div>
@@ -526,7 +591,11 @@ const Gallery: React.FC = () => {
       {/* Folder grid */}
       <FolderGrid />
 
-      {images.length === 0 && folders.length === 0 ? (
+      {loading && images.length === 0 && folders.length === 0 ? (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+        </div>
+      ) : images.length === 0 && folders.length === 0 ? (
         <div className="text-center text-gray-500 py-16">
           <Image className="h-16 w-16 mx-auto text-gray-300 mb-4" />
           <p className="text-xl">תיקייה ריקה</p>
@@ -540,6 +609,7 @@ const Gallery: React.FC = () => {
           {/* Pagination controls - top */}
           <PaginationControls />
         
+          {/* Image Gallery */}
           <div className="relative">
             <ImageGallery
               items={galleryItems}
@@ -556,6 +626,7 @@ const Gallery: React.FC = () => {
                     data-file-id={item.customData?.id}
                     onError={handleImageError}
                     onClick={handleImageClick}
+                    loading="lazy"
                   />
                   {item.description && (
                     <span className="image-gallery-description">{item.description}</span>
@@ -587,7 +658,7 @@ const Gallery: React.FC = () => {
           {/* Pagination controls - bottom */}
           <PaginationControls />
 
-          {/* Thumbnail Grid View (Alternative) */}
+          {/* Thumbnail Grid View */}
           <div className="mt-16">
             <h2 className="text-2xl font-bold mb-6">כל התמונות</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -601,6 +672,7 @@ const Gallery: React.FC = () => {
                     src={image.proxyThumbnailUrl || image.thumbnailLink}
                     alt={image.name}
                     className="w-full h-48 object-cover"
+                    loading="lazy"
                     onError={(e) => {
                       // Fallback to direct URL if proxy fails
                       const target = e.target as HTMLImageElement;
@@ -620,6 +692,28 @@ const Gallery: React.FC = () => {
                 </div>
               ))}
             </div>
+            
+            {/* Loading indicator for lazy loading */}
+            {isLazyLoading && (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+              </div>
+            )}
+            
+            {/* Load more button (alternative to scroll-based loading) */}
+            {!isLazyLoading && !allImagesLoaded && nextPageToken && (
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => {
+                    setPageToken(nextPageToken);
+                    fetchContent({ pageToken: nextPageToken, pageSize: LAZY_LOAD_SIZE });
+                  }}
+                  className="px-6 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600"
+                >
+                  טען עוד תמונות
+                </button>
+              </div>
+            )}
             
             {/* Bottom pagination for thumbnail view */}
             <PaginationControls />
