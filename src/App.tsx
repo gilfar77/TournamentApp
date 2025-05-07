@@ -13,6 +13,7 @@ import Players from './pages/Players';
 import LiveScores from './pages/LiveScores';
 import Standings from './pages/Standings';
 import Gallery from './pages/Gallery';
+import GalleryTest from './pages/GalleryTest';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
               <Route path="/standings" element={<Standings />} />
               <Route path="/players" element={<Players />} />
               <Route path="/gallery" element={<Gallery />} />
+              <Route path="/gallery-test" element={<GalleryTest />} />
               
               {/* Admin Routes */}
               <Route path="/admin" element={
